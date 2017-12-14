@@ -196,6 +196,8 @@ func TestIsMultiImage(t *testing.T) {
 	}{
 		{manifest.DockerV2ListMediaType, true},
 		{manifest.DockerV2Schema2MediaType, false},
+		{v1.MediaTypeImageManifest, false},
+		{v1.MediaTypeImageIndex, true},
 	} {
 		src := fakeImageSource(c.mt)
 		res, err := isMultiImage(src)

@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/containers/image/image"
+	"github.com/containers/image/manifest"
 	"github.com/containers/image/pkg/compression"
 	"github.com/containers/image/signature"
 	"github.com/containers/image/transports"
 	"github.com/containers/image/types"
 	"github.com/opencontainers/go-digest"
+	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	pb "gopkg.in/cheggaaa/pb.v1"
@@ -100,6 +102,7 @@ type Options struct {
 	Progress         chan types.ProgressProperties // Reported to when ProgressInterval has arrived for a single artifact+offset.
 	// manifest MIME type of image set by user. "" is default and means use the autodetection to the the manifest MIME type
 	ForceManifestMIMEType string
+	MultipleImages        bool // If set, expect to copy multiple images
 }
 
 // Image copies image from srcRef to destRef, using policyContext to validate
@@ -157,22 +160,33 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 	}
 
 	if !multiImage {
-		// The simple case: Just copy a single image.
-		if err := c.copyOneImage(policyContext, options, unparsedToplevel); err != nil {
+		// The simple case: just copy a single image.
+		if _, _, err := c.copyOneImage(policyContext, options, unparsedToplevel, nil, nil); err != nil {
 			return err
 		}
 	} else {
-		// This is a manifest list. Choose a single image and copy it.
-		// FIXME: Copy to destinations which support manifest lists, one image at a time.
-		instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
-		if err != nil {
-			return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(srcRef))
+		// If we were asked to copy multiple images and can't, that's an error.
+		if options.MultipleImages && !supportsMultipleImages(c.dest) {
+			return errors.Errorf("Error copying multiple images: destination reference %q does not support multiple images", transports.ImageName(destRef))
 		}
-		logrus.Debugf("Source is a manifest list; copying (only) instance %s", instanceDigest)
-		unparsedInstance := image.UnparsedInstance(rawSource, &instanceDigest)
+		if !supportsMultipleImages(c.dest) || !options.MultipleImages {
+			// This is a manifest list, and we weren't asked to copy multiple images. Choose a single image and copy it.
+			instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
+			if err != nil {
+				return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(srcRef))
+			}
+			logrus.Debugf("Source is a manifest list; copying (only) instance %s", instanceDigest)
+			unparsedInstance := image.UnparsedInstance(rawSource, &instanceDigest)
 
-		if err := c.copyOneImage(policyContext, options, unparsedInstance); err != nil {
-			return err
+			if _, _, err := c.copyOneImage(policyContext, options, unparsedInstance, &instanceDigest, nil); err != nil {
+				return err
+			}
+		} else {
+			// Copy all of the images.
+			logrus.Debugf("Source is a manifest list; copying all instances")
+			if err := c.copyMultipleImages(policyContext, options, unparsedToplevel); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -183,33 +197,194 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 	return nil
 }
 
-// Image copies a single (on-manifest-list) image unparsedImage, using policyContext to validate
+// Checks if the destination supports accepting multiple images by checking if it can support
+// manifest types that are lists of other manifests.
+func supportsMultipleImages(dest types.ImageDestination) bool {
+	mtypes := dest.SupportedManifestMIMETypes()
+	if len(mtypes) == 0 {
+		// Anything goes!
+		return true
+	}
+	for _, mtype := range mtypes {
+		if manifest.MIMETypeIsMultiImage(mtype) {
+			return true
+		}
+	}
+	return false
+}
+
+// copyMultipleImages copies all of an image's instances, using policyContext to validate
 // source image admissibility.
-func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *Options, unparsedImage *image.UnparsedImage) (retErr error) {
+func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, options *Options, unparsedToplevel *image.UnparsedImage) (retErr error) {
+	// Parse the list and get a copy of the original value after it's re-encoded.
+	manifestList, manifestType, err := unparsedToplevel.Manifest()
+	if err != nil {
+		return errors.Wrapf(err, "Error reading manifest list")
+	}
+	list, err := manifest.ListFromBlob(manifestList, manifestType)
+	if err != nil {
+		return errors.Wrapf(err, "Error parsing manifest list %q", string(manifestList))
+	}
+	originalManifestList, err := list.Serialize()
+	if err != nil {
+		return errors.Wrapf(err, "Error re-encoding manifest list %q", string(manifestList))
+	}
+
+	// Read and/or clear the set of signatures for this list.
+	var sigs [][]byte
+	if options.RemoveSignatures {
+		sigs = [][]byte{}
+	} else {
+		c.Printf("Getting image list signatures\n")
+		s, err := c.rawSource.GetSignatures(context.TODO(), nil)
+		if err != nil {
+			return errors.Wrap(err, "Error reading signatures")
+		}
+		sigs = s
+	}
+	if len(sigs) != 0 {
+		c.Printf("Checking if image list destination supports signatures\n")
+		if err := c.dest.SupportsSignatures(); err != nil {
+			return errors.Wrap(err, "Can not copy signatures")
+		}
+	}
+
+	// Copy each image, in turn.
+	instanceBlobs := list.Instances()
+	updates := make([]manifest.ManifestListUpdate, 0, len(instanceBlobs))
+	for i, instance := range instanceBlobs {
+		logrus.Debugf("Copying instance %s (%d/%d)", instance.Digest, i+1, len(instanceBlobs))
+		unparsedInstance := image.UnparsedInstance(c.rawSource, &instance.Digest)
+		updatedManifest, updatedManifestType, err := c.copyOneImage(policyContext, options, unparsedInstance, &instance.Digest, &instance.Digest)
+		if err != nil {
+			return err
+		}
+		// Record the result of a possible conversion here.
+		update := manifest.ManifestListUpdate{
+			Digest:    digest.FromBytes(updatedManifest),
+			Size:      int64(len(updatedManifest)),
+			MediaType: updatedManifestType,
+		}
+		updates = append(updates, update)
+	}
+
+	// Now apply the updates.
+	if err = list.UpdateInstances(updates); err != nil {
+		return errors.Wrapf(err, "Error updating manifest list")
+	}
+
+	// Encode the list again.  If the result is the same as it was before we applied the
+	// updates, then the list wasn't changed, and we can just use the original encoded value.
+	updatedManifestList, err := list.Serialize()
+	if err != nil {
+		return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
+	}
+
+	// Determine if we need to convert the manifest to a different format.
+	allowedTypes := c.dest.SupportedManifestMIMETypes()
+	if len(allowedTypes) > 0 {
+		selectedType := allowedTypes[0]
+		for _, allowedType := range allowedTypes {
+			if manifest.MIMETypeIsMultiImage(allowedType) {
+				// Choose the first acceptable one in the list.
+				selectedType = allowedType
+				break
+			}
+		}
+		for _, allowedType := range allowedTypes {
+			if allowedType == list.MIMEType() {
+				selectedType = allowedType
+				// Current type is allowed, so no type conversion actually necessary.
+				break
+			}
+		}
+		if selectedType != list.MIMEType() {
+			switch selectedType {
+			case manifest.DockerV2ListMediaType:
+				list, err = list.ToSchema2List()
+				if err != nil {
+					return errors.Wrapf(err, "Error converting manifest list to a schema 2 list")
+				}
+				updatedManifestList, err = list.Serialize()
+				if err != nil {
+					return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
+				}
+			case imgspecv1.MediaTypeImageIndex:
+				list, err = list.ToOCI1Index()
+				if err != nil {
+					return errors.Wrapf(err, "Error converting manifest list to an oci 1 index")
+				}
+				updatedManifestList, err = list.Serialize()
+				if err != nil {
+					return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
+				}
+			case "":
+				return errors.Errorf("Destination does not support manifest list types")
+			default:
+				return errors.Errorf("Error converting manifest list to unknown supported type %q", selectedType)
+			}
+		}
+	}
+
+	// If we can't use the original value, flag an error.
+	if !bytes.Equal(updatedManifestList, originalManifestList) {
+		canModifyManifest := (len(sigs) == 0)
+		if !canModifyManifest {
+			return errors.Errorf("Internal error: copyMultipleImages() needs to use an updated manifest but that was known to be forbidden")
+		}
+		manifestList = updatedManifestList
+		logrus.Debugf("Manifest list has been updated")
+	}
+
+	// Save the manifest list.
+	if err = c.dest.PutManifest(manifestList, nil); err != nil {
+		return errors.Wrapf(err, "Error writing manifest list %q", string(manifestList))
+	}
+
+	// Sign the manifest list.
+	if options.SignBy != "" {
+		newSig, err := c.createSignature(manifestList, options.SignBy)
+		if err != nil {
+			return err
+		}
+		sigs = append(sigs, newSig)
+	}
+
+	c.Printf("Storing list signatures\n")
+	if err := c.dest.PutSignatures(sigs, nil); err != nil {
+		return errors.Wrap(err, "Error writing signatures")
+	}
+
+	return nil
+}
+
+// copyOneImage copies a single (non-manifest-list) image unparsedImage, using policyContext to validate
+// source image admissibility.
+func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *Options, unparsedImage *image.UnparsedImage, sourceInstance, targetInstance *digest.Digest) (retManifest []byte, retManifestType string, retErr error) {
 	// The caller is handling manifest lists; this could happen only if a manifest list contains a manifest list.
 	// Make sure we fail cleanly in such cases.
 	multiImage, err := isMultiImage(unparsedImage)
 	if err != nil {
 		// FIXME FIXME: How to name a reference for the sub-image?
-		return errors.Wrapf(err, "Error determining manifest MIME type for %s", transports.ImageName(unparsedImage.Reference()))
+		return nil, "", errors.Wrapf(err, "Error determining manifest MIME type for %s", transports.ImageName(unparsedImage.Reference()))
 	}
 	if multiImage {
-		return fmt.Errorf("Unexpectedly received a manifest list instead of a manifest for a single image")
+		return nil, "", fmt.Errorf("Unexpectedly received a manifest list instead of a manifest for a single image")
 	}
 
 	// Please keep this policy check BEFORE reading any other information about the image.
 	// (the multiImage check above only matches the MIME type, which we have received anyway.
-	// Actual parsing of anything should be deferred.)
+	// Actual parsing of anything should be deferred.
 	if allowed, err := policyContext.IsRunningImageAllowed(unparsedImage); !allowed || err != nil { // Be paranoid and fail if either return value indicates so.
-		return errors.Wrap(err, "Source image rejected")
+		return nil, "", errors.Wrap(err, "Source image rejected")
 	}
 	src, err := image.FromUnparsedImage(options.SourceCtx, unparsedImage)
 	if err != nil {
-		return errors.Wrapf(err, "Error initializing image from source %s", transports.ImageName(c.rawSource.Reference()))
+		return nil, "", errors.Wrapf(err, "Error initializing image from source %s", transports.ImageName(c.rawSource.Reference()))
 	}
 
 	if err := checkImageDestinationForCurrentRuntimeOS(options.DestinationCtx, src, c.dest); err != nil {
-		return err
+		return nil, "", err
 	}
 
 	var sigs [][]byte
@@ -217,16 +392,16 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 		sigs = [][]byte{}
 	} else {
 		c.Printf("Getting image source signatures\n")
-		s, err := src.Signatures(context.TODO())
+		s, err := c.rawSource.GetSignatures(context.TODO(), sourceInstance)
 		if err != nil {
-			return errors.Wrap(err, "Error reading signatures")
+			return nil, "", errors.Wrap(err, "Error reading signatures")
 		}
 		sigs = s
 	}
 	if len(sigs) != 0 {
 		c.Printf("Checking if image destination supports signatures\n")
 		if err := c.dest.SupportsSignatures(); err != nil {
-			return errors.Wrap(err, "Can not copy signatures")
+			return nil, "", errors.Wrap(err, "Can not copy signatures")
 		}
 	}
 
@@ -239,28 +414,29 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 	}
 
 	if err := ic.updateEmbeddedDockerReference(); err != nil {
-		return err
+		return nil, "", err
 	}
 
 	// We compute preferredManifestMIMEType only to show it in error messages.
 	// Without having to add this context in an error message, we would be happy enough to know only that no conversion is needed.
 	preferredManifestMIMEType, otherManifestMIMETypeCandidates, err := ic.determineManifestConversion(c.dest.SupportedManifestMIMETypes(), options.ForceManifestMIMEType)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 
 	// If src.UpdatedImageNeedsLayerDiffIDs(ic.manifestUpdates) will be true, it needs to be true by the time we get here.
 	ic.diffIDsAreNeeded = src.UpdatedImageNeedsLayerDiffIDs(*ic.manifestUpdates)
 
 	if err := ic.copyLayers(); err != nil {
-		return err
+		return nil, "", err
 	}
 
 	// With docker/distribution registries we do not know whether the registry accepts schema2 or schema1 only;
 	// and at least with the OpenShift registry "acceptschema2" option, there is no way to detect the support
 	// without actually trying to upload something and getting a types.ManifestTypeRejectedError.
 	// So, try the preferred manifest MIME type. If the process succeeds, fine…
-	manifest, err := ic.copyUpdatedConfigAndManifest()
+	manifest, err := ic.copyUpdatedConfigAndManifest(targetInstance)
+	retManifestType = preferredManifestMIMEType
 	if err != nil {
 		logrus.Debugf("Writing manifest using preferred type %s failed: %v", preferredManifestMIMEType, err)
 		// … if it fails, _and_ the failure is because the manifest is rejected, we may have other options.
@@ -268,14 +444,14 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 			// We don’t have other options.
 			// In principle the code below would handle this as well, but the resulting  error message is fairly ugly.
 			// Don’t bother the user with MIME types if we have no choice.
-			return err
+			return nil, "", err
 		}
 		// If the original MIME type is acceptable, determineManifestConversion always uses it as preferredManifestMIMEType.
 		// So if we are here, we will definitely be trying to convert the manifest.
 		// With !ic.canModifyManifest, that would just be a string of repeated failures for the same reason,
 		// so let’s bail out early and with a better error message.
 		if !ic.canModifyManifest {
-			return errors.Wrap(err, "Writing manifest failed (and converting it is not possible)")
+			return nil, "", errors.Wrap(err, "Writing manifest failed (and converting it is not possible)")
 		}
 
 		// errs is a list of errors when trying various manifest types. Also serves as an "upload succeeded" flag when set to nil.
@@ -283,7 +459,7 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 		for _, manifestMIMEType := range otherManifestMIMETypeCandidates {
 			logrus.Debugf("Trying to use manifest type %s…", manifestMIMEType)
 			ic.manifestUpdates.ManifestMIMEType = manifestMIMEType
-			attemptedManifest, err := ic.copyUpdatedConfigAndManifest()
+			attemptedManifest, err := ic.copyUpdatedConfigAndManifest(targetInstance)
 			if err != nil {
 				logrus.Debugf("Upload of manifest type %s failed: %v", manifestMIMEType, err)
 				errs = append(errs, fmt.Sprintf("%s(%v)", manifestMIMEType, err))
@@ -292,28 +468,29 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 
 			// We have successfully uploaded a manifest.
 			manifest = attemptedManifest
+			retManifestType = manifestMIMEType
 			errs = nil // Mark this as a success so that we don't abort below.
 			break
 		}
 		if errs != nil {
-			return fmt.Errorf("Uploading manifest failed, attempted the following formats: %s", strings.Join(errs, ", "))
+			return nil, "", fmt.Errorf("Uploading manifest failed, attempted the following formats: %s", strings.Join(errs, ", "))
 		}
 	}
 
 	if options.SignBy != "" {
 		newSig, err := c.createSignature(manifest, options.SignBy)
 		if err != nil {
-			return err
+			return nil, "", err
 		}
 		sigs = append(sigs, newSig)
 	}
 
 	c.Printf("Storing signatures\n")
-	if err := c.dest.PutSignatures(sigs, nil); err != nil {
-		return errors.Wrap(err, "Error writing signatures")
+	if err := c.dest.PutSignatures(sigs, targetInstance); err != nil {
+		return nil, "", errors.Wrap(err, "Error writing signatures")
 	}
 
-	return nil
+	return manifest, retManifestType, nil
 }
 
 // Printf writes a formatted string to c.reportWriter.
@@ -426,7 +603,7 @@ func layerDigestsDiffer(a, b []types.BlobInfo) bool {
 
 // copyUpdatedConfigAndManifest updates the image per ic.manifestUpdates, if necessary,
 // stores the resulting config and manifest to the destination, and returns the stored manifest.
-func (ic *imageCopier) copyUpdatedConfigAndManifest() ([]byte, error) {
+func (ic *imageCopier) copyUpdatedConfigAndManifest(instanceDigest *digest.Digest) ([]byte, error) {
 	pendingImage := ic.src
 	if !reflect.DeepEqual(*ic.manifestUpdates, types.ManifestUpdateOptions{InformationOnly: ic.manifestUpdates.InformationOnly}) {
 		if !ic.canModifyManifest {
@@ -457,7 +634,11 @@ func (ic *imageCopier) copyUpdatedConfigAndManifest() ([]byte, error) {
 	}
 
 	ic.c.Printf("Writing manifest to image destination\n")
-	if err := ic.c.dest.PutManifest(manifest, nil); err != nil {
+	if instanceDigest != nil {
+		tmpDigest := digest.FromBytes(manifest)
+		instanceDigest = &tmpDigest
+	}
+	if err := ic.c.dest.PutManifest(manifest, instanceDigest); err != nil {
 		return nil, errors.Wrap(err, "Error writing manifest")
 	}
 	return manifest, nil
