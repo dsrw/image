@@ -166,7 +166,10 @@ func (ref dirReference) DeleteImage(ctx *types.SystemContext) error {
 }
 
 // manifestPath returns a path for the manifest within a directory using our conventions.
-func (ref dirReference) manifestPath() string {
+func (ref dirReference) manifestPath(instanceDigest *digest.Digest) string {
+	if instanceDigest != nil {
+		return filepath.Join(ref.path, instanceDigest.Hex()+".manifest.json")
+	}
 	return filepath.Join(ref.path, "manifest.json")
 }
 
@@ -177,7 +180,10 @@ func (ref dirReference) layerPath(digest digest.Digest) string {
 }
 
 // signaturePath returns a path for a signature within a directory using our conventions.
-func (ref dirReference) signaturePath(index int) string {
+func (ref dirReference) signaturePath(index int, instanceDigest *digest.Digest) string {
+	if instanceDigest != nil {
+		return filepath.Join(ref.path, fmt.Sprintf(instanceDigest.Hex()+".signature-%d", index+1))
+	}
 	return filepath.Join(ref.path, fmt.Sprintf("signature-%d", index+1))
 }
 

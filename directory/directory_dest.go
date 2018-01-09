@@ -186,18 +186,12 @@ func (d *dirImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, 
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (d *dirImageDestination) PutManifest(manifest []byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "dir:"`)
-	}
-	return ioutil.WriteFile(d.ref.manifestPath(), manifest, 0644)
+	return ioutil.WriteFile(d.ref.manifestPath(instanceDigest), manifest, 0644)
 }
 
 func (d *dirImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "dir:"`)
-	}
 	for i, sig := range signatures {
-		if err := ioutil.WriteFile(d.ref.signaturePath(i), sig, 0644); err != nil {
+		if err := ioutil.WriteFile(d.ref.signaturePath(i, instanceDigest), sig, 0644); err != nil {
 			return err
 		}
 	}

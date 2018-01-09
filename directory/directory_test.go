@@ -31,9 +31,13 @@ func TestGetPutManifest(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	man := []byte("test-manifest")
+	md, err := manifest.Digest(man)
+	require.NoError(t, err)
 	dest, err := ref.NewImageDestination(nil)
 	require.NoError(t, err)
 	defer dest.Close()
+	err = dest.PutManifest(man, &md)
+	assert.NoError(t, err)
 	err = dest.PutManifest(man, nil)
 	assert.NoError(t, err)
 	err = dest.Commit()
@@ -47,11 +51,10 @@ func TestGetPutManifest(t *testing.T) {
 	assert.Equal(t, man, m)
 	assert.Equal(t, "", mt)
 
-	// Non-default instances are not supported
-	md, err := manifest.Digest(man)
-	require.NoError(t, err)
 	_, _, err = src.GetManifest(&md)
-	assert.Error(t, err)
+	assert.NoError(t, err)
+	assert.Equal(t, man, m)
+	assert.Equal(t, "", mt)
 }
 
 func TestGetPutBlob(t *testing.T) {
@@ -144,12 +147,19 @@ func TestGetPutSignatures(t *testing.T) {
 		[]byte("sig1"),
 		[]byte("sig2"),
 	}
+	md, err := manifest.Digest(man)
+	require.NoError(t, err)
+
 	err = dest.SupportsSignatures()
 	assert.NoError(t, err)
 	err = dest.PutManifest(man, nil)
 	require.NoError(t, err)
+	err = dest.PutManifest(man, &md)
+	require.NoError(t, err)
 
 	err = dest.PutSignatures(signatures, nil)
+	assert.NoError(t, err)
+	err = dest.PutSignatures(signatures, &md)
 	assert.NoError(t, err)
 	err = dest.Commit()
 	assert.NoError(t, err)
@@ -161,11 +171,9 @@ func TestGetPutSignatures(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, signatures, sigs)
 
-	// Non-default instances are not supported
-	md, err := manifest.Digest(man)
-	require.NoError(t, err)
-	_, err = src.GetSignatures(context.Background(), &md)
-	assert.Error(t, err)
+	sigs, err = src.GetSignatures(context.Background(), &md)
+	assert.NoError(t, err)
+	assert.Equal(t, signatures, sigs)
 }
 
 func TestSourceReference(t *testing.T) {
