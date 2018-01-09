@@ -107,7 +107,7 @@ func putTestManifest(t *testing.T, ociRef ociReference, tmpDir string) {
 	assert.NoError(t, err)
 
 	data := []byte("abc")
-	err = imageDest.PutManifest(data)
+	err = imageDest.PutManifest(data, nil)
 	assert.NoError(t, err)
 
 	err = imageDest.Commit()

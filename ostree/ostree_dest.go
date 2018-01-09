@@ -336,7 +336,11 @@ func (d *ostreeImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-func (d *ostreeImageDestination) PutManifest(manifestBlob []byte) error {
+func (d *ostreeImageDestination) PutManifest(manifestBlob []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "ostree:"`)
+	}
+
 	d.manifest = string(manifestBlob)
 
 	if err := json.Unmarshal(manifestBlob, &d.schema); err != nil {
@@ -357,7 +361,11 @@ func (d *ostreeImageDestination) PutManifest(manifestBlob []byte) error {
 	return ioutil.WriteFile(manifestPath, manifestBlob, 0644)
 }
 
-func (d *ostreeImageDestination) PutSignatures(signatures [][]byte) error {
+func (d *ostreeImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "ostree:"`)
+	}
+
 	path := filepath.Join(d.tmpDirPath, d.ref.signaturePath(0))
 	if err := ensureParentDirectoryExists(path); err != nil {
 		return err

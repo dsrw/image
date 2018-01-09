@@ -92,7 +92,7 @@ func (s *ostreeImageSource) getTarSplitData(blob string) ([]byte, error) {
 // It may use a remote (= slow) service.
 func (s *ostreeImageSource) GetManifest(instanceDigest *digest.Digest) ([]byte, string, error) {
 	if instanceDigest != nil {
-		return nil, "", errors.Errorf(`Manifest lists are not supported by "ostree:"`)
+		return nil, "", errors.New(`Manifest lists are not supported by "ostree:"`)
 	}
 	if s.repo == nil {
 		repo, err := openRepo(s.ref.repo)
@@ -315,7 +315,7 @@ func (s *ostreeImageSource) GetBlob(info types.BlobInfo) (io.ReadCloser, int64, 
 
 func (s *ostreeImageSource) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error) {
 	if instanceDigest != nil {
-		return nil, errors.New("manifest lists are not supported by this transport")
+		return nil, errors.New(`Manifest lists are not supported by "ostree:"`)
 	}
 	lenSignatures, err := s.getLenSignatures()
 	if err != nil {
@@ -349,6 +349,6 @@ func (s *ostreeImageSource) GetSignatures(ctx context.Context, instanceDigest *d
 }
 
 // LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
-func (s *ostreeImageSource) LayerInfosForCopy() []types.BlobInfo {
+func (s *ostreeImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }

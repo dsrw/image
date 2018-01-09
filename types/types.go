@@ -129,7 +129,7 @@ type ImageSource interface {
 	// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer blobsums that are listed in the image's manifest.
 	// The Digest field is guaranteed to be provided; Size may be -1.
 	// WARNING: The list may contain duplicates, and they are semantically relevant.
-	LayerInfosForCopy() []BlobInfo
+	LayerInfosForCopy(instanceDigest *digest.Digest) []BlobInfo
 }
 
 // ImageDestination is a service, possibly remote (= slow), to store components of a single image.
@@ -180,8 +180,8 @@ type ImageDestination interface {
 	// FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 	// If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 	// but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-	PutManifest(manifest []byte) error
-	PutSignatures(signatures [][]byte) error
+	PutManifest(manifest []byte, instanceDigest *digest.Digest) error
+	PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error
 	// Commit marks the process of storing the image as successful and asks for the image to be persisted.
 	// WARNING: This does not have any transactional semantics:
 	// - Uploaded data MAY be visible to others before Commit() is called

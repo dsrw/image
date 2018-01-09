@@ -309,7 +309,7 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 	}
 
 	c.Printf("Storing signatures\n")
-	if err := c.dest.PutSignatures(sigs); err != nil {
+	if err := c.dest.PutSignatures(sigs, nil); err != nil {
 		return errors.Wrap(err, "Error writing signatures")
 	}
 
@@ -457,7 +457,7 @@ func (ic *imageCopier) copyUpdatedConfigAndManifest() ([]byte, error) {
 	}
 
 	ic.c.Printf("Writing manifest to image destination\n")
-	if err := ic.c.dest.PutManifest(manifest); err != nil {
+	if err := ic.c.dest.PutManifest(manifest, nil); err != nil {
 		return nil, errors.Wrap(err, "Error writing manifest")
 	}
 	return manifest, nil

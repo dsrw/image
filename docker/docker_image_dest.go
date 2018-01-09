@@ -213,7 +213,10 @@ func (d *dockerImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-func (d *dockerImageDestination) PutManifest(m []byte) error {
+func (d *dockerImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "docker:"`)
+	}
 	digest, err := manifest.Digest(m)
 	if err != nil {
 		return err
@@ -268,7 +271,10 @@ func isManifestInvalidError(err error) bool {
 	return ec.ErrorCode() == v2.ErrorCodeManifestInvalid || ec.ErrorCode() == v2.ErrorCodeTagInvalid
 }
 
-func (d *dockerImageDestination) PutSignatures(signatures [][]byte) error {
+func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "docker:"`)
+	}
 	// Do not fail if we don’t really need to support signatures.
 	if len(signatures) == 0 {
 		return nil

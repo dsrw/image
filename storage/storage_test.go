@@ -390,10 +390,10 @@ func TestWriteRead(t *testing.T) {
 		manifest = strings.Replace(manifest, "%li", li, -1)
 		manifest = strings.Replace(manifest, "%ci", sum.Hex(), -1)
 		t.Logf("this manifest is %q", manifest)
-		if err := dest.PutManifest([]byte(manifest)); err != nil {
+		if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 			t.Fatalf("Error saving manifest to destination: %v", err)
 		}
-		if err := dest.PutSignatures(signatures); err != nil {
+		if err := dest.PutSignatures(signatures, nil); err != nil {
 			t.Fatalf("Error saving signatures to destination: %v", err)
 		}
 		if err := dest.Commit(); err != nil {
@@ -551,7 +551,7 @@ func TestDuplicateName(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {
@@ -586,7 +586,7 @@ func TestDuplicateName(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {
@@ -637,7 +637,7 @@ func TestDuplicateID(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {
@@ -672,7 +672,7 @@ func TestDuplicateID(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); errors.Cause(err) != storage.ErrDuplicateID {
@@ -726,7 +726,7 @@ func TestDuplicateNameID(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {
@@ -761,7 +761,7 @@ func TestDuplicateNameID(t *testing.T) {
 		    ]
 		}
 	`, digest, size)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); errors.Cause(err) != storage.ErrDuplicateID {
@@ -881,7 +881,7 @@ func TestSize(t *testing.T) {
 		    ]
 		}
 	`, configInfo.Size, configInfo.Digest, digest1, size1, digest2, size2)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {
@@ -991,7 +991,7 @@ func TestDuplicateBlob(t *testing.T) {
 		    ]
 		}
 	`, configInfo.Size, configInfo.Digest, digest1, size1, digest2, size2, digest1, size1, digest2, size2)
-	if err := dest.PutManifest([]byte(manifest)); err != nil {
+	if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 		t.Fatalf("Error storing manifest to destination: %v", err)
 	}
 	if err := dest.Commit(); err != nil {

@@ -53,7 +53,7 @@ func (s *dockerImageSource) Close() error {
 }
 
 // LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
-func (s *dockerImageSource) LayerInfosForCopy() []types.BlobInfo {
+func (s *dockerImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }
 

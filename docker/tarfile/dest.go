@@ -164,7 +164,10 @@ func (d *Destination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, error) {
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-func (d *Destination) PutManifest(m []byte) error {
+func (d *Destination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported for docker tar files`)
+	}
 	// We do not bother with types.ManifestTypeRejectedError; our .SupportedManifestMIMETypes() above is already providing only one alternative,
 	// so the caller trying a different manifest kind would be pointless.
 	var man manifest.Schema2
@@ -243,7 +246,10 @@ func (d *Destination) sendFile(path string, expectedSize int64, stream io.Reader
 // PutSignatures adds the given signatures to the docker tarfile (currently not
 // supported). MUST be called after PutManifest (signatures reference manifest
 // contents)
-func (d *Destination) PutSignatures(signatures [][]byte) error {
+func (d *Destination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.Errorf(`Manifest lists are not supported for docker tar files`)
+	}
 	if len(signatures) != 0 {
 		return errors.Errorf("Storing signatures for docker tar files is not supported")
 	}

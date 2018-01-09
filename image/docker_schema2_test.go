@@ -38,7 +38,7 @@ func (f unusedImageSource) GetBlob(info types.BlobInfo) (io.ReadCloser, int64, e
 func (f unusedImageSource) GetSignatures(context.Context, *digest.Digest) ([][]byte, error) {
 	panic("Unexpected call to a mock function")
 }
-func (f unusedImageSource) LayerInfosForCopy() []types.BlobInfo {
+func (f unusedImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	panic("Unexpected call to a mock function")
 }
 
@@ -405,10 +405,10 @@ func (d *memoryImageDest) HasBlob(inputInfo types.BlobInfo) (bool, int64, error)
 func (d *memoryImageDest) ReapplyBlob(inputInfo types.BlobInfo) (types.BlobInfo, error) {
 	panic("Unexpected call to a mock function")
 }
-func (d *memoryImageDest) PutManifest([]byte) error {
+func (d *memoryImageDest) PutManifest([]byte, *digest.Digest) error {
 	panic("Unexpected call to a mock function")
 }
-func (d *memoryImageDest) PutSignatures(signatures [][]byte) error {
+func (d *memoryImageDest) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	panic("Unexpected call to a mock function")
 }
 func (d *memoryImageDest) Commit() error {

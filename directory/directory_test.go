@@ -34,7 +34,7 @@ func TestGetPutManifest(t *testing.T) {
 	dest, err := ref.NewImageDestination(nil)
 	require.NoError(t, err)
 	defer dest.Close()
-	err = dest.PutManifest(man)
+	err = dest.PutManifest(man, nil)
 	assert.NoError(t, err)
 	err = dest.Commit()
 	assert.NoError(t, err)
@@ -146,10 +146,10 @@ func TestGetPutSignatures(t *testing.T) {
 	}
 	err = dest.SupportsSignatures()
 	assert.NoError(t, err)
-	err = dest.PutManifest(man)
+	err = dest.PutManifest(man, nil)
 	require.NoError(t, err)
 
-	err = dest.PutSignatures(signatures)
+	err = dest.PutSignatures(signatures, nil)
 	assert.NoError(t, err)
 	err = dest.Commit()
 	assert.NoError(t, err)

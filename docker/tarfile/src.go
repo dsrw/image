@@ -254,7 +254,7 @@ func (s *Source) prepareLayerData(tarManifest *ManifestItem, parsedConfig *manif
 func (s *Source) GetManifest(instanceDigest *digest.Digest) ([]byte, string, error) {
 	if instanceDigest != nil {
 		// How did we even get here? GetManifest(nil) has returned a manifest.DockerV2Schema2MediaType.
-		return nil, "", errors.Errorf(`Manifest lists are not supported by "docker-daemon:"`)
+		return nil, "", errors.New(`Manifest lists are not supported by "docker-daemon:"`)
 	}
 	if s.generatedManifest == nil {
 		if err := s.ensureCachedDataIsPresent(); err != nil {
@@ -360,7 +360,7 @@ func (s *Source) GetBlob(info types.BlobInfo) (io.ReadCloser, int64, error) {
 func (s *Source) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error) {
 	if instanceDigest != nil {
 		// How did we even get here? GetManifest(nil) has returned a manifest.DockerV2Schema2MediaType.
-		return nil, errors.Errorf(`Manifest lists are not supported by "docker-daemon:"`)
+		return nil, errors.New(`Manifest lists are not supported by "docker-daemon:"`)
 	}
 	return [][]byte{}, nil
 }

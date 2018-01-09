@@ -195,7 +195,10 @@ func (d *ociImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, 
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-func (d *ociImageDestination) PutManifest(m []byte) error {
+func (d *ociImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "oci:"`)
+	}
 	digest, err := manifest.Digest(m)
 	if err != nil {
 		return err
@@ -244,7 +247,10 @@ func (d *ociImageDestination) addManifest(desc *imgspecv1.Descriptor) {
 	d.index.Manifests = append(d.index.Manifests, *desc)
 }
 
-func (d *ociImageDestination) PutSignatures(signatures [][]byte) error {
+func (d *ociImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "oci:"`)
+	}
 	if len(signatures) != 0 {
 		return errors.Errorf("Pushing signatures for OCI images is not supported")
 	}

@@ -247,7 +247,7 @@ func (s *openshiftImageSource) GetSignatures(ctx context.Context, instanceDigest
 }
 
 // LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
-func (s *openshiftImageSource) LayerInfosForCopy() []types.BlobInfo {
+func (s *openshiftImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }
 
@@ -396,17 +396,24 @@ func (d *openshiftImageDestination) ReapplyBlob(info types.BlobInfo) (types.Blob
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
-func (d *openshiftImageDestination) PutManifest(m []byte) error {
+func (d *openshiftImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "atomic:"`)
+	}
+
 	manifestDigest, err := manifest.Digest(m)
 	if err != nil {
 		return err
 	}
 	d.imageStreamImageName = manifestDigest.String()
 
-	return d.docker.PutManifest(m)
+	return d.docker.PutManifest(m, instanceDigest)
 }
 
-func (d *openshiftImageDestination) PutSignatures(signatures [][]byte) error {
+func (d *openshiftImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return errors.New(`Manifest lists are not supported by "atomic:"`)
+	}
 	if d.imageStreamImageName == "" {
 		return errors.Errorf("Internal error: Unknown manifest digest, can't add signatures")
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/containers/image/types"
 	"github.com/containers/storage/pkg/archive"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -87,12 +88,12 @@ func (d *ociArchiveImageDestination) ReapplyBlob(info types.BlobInfo) (types.Blo
 }
 
 // PutManifest writes manifest to the destination
-func (d *ociArchiveImageDestination) PutManifest(m []byte) error {
-	return d.unpackedDest.PutManifest(m)
+func (d *ociArchiveImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
+	return d.unpackedDest.PutManifest(m, instanceDigest)
 }
 
-func (d *ociArchiveImageDestination) PutSignatures(signatures [][]byte) error {
-	return d.unpackedDest.PutSignatures(signatures)
+func (d *ociArchiveImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	return d.unpackedDest.PutSignatures(signatures, instanceDigest)
 }
 
 // Commit marks the process of storing the image as successful and asks for the image to be persisted

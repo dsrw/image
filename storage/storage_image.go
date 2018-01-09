@@ -177,7 +177,7 @@ func (s *storageImageSource) GetManifest(instanceDigest *digest.Digest) (manifes
 
 // LayerInfosForCopy() returns the list of layer blobs that make up the root filesystem of
 // the image, after they've been decompressed.
-func (s *storageImageSource) LayerInfosForCopy() []types.BlobInfo {
+func (s *storageImageSource) LayerInfosForCopy(instanceDigest *digest.Digest) []types.BlobInfo {
 	simg, err := s.imageRef.transport.store.Image(s.ID)
 	if err != nil {
 		logrus.Errorf("error reading image %q: %v", s.ID, err)
@@ -696,7 +696,10 @@ func (s *storageImageDestination) SupportedManifestMIMETypes() []string {
 }
 
 // PutManifest writes the manifest to the destination.
-func (s *storageImageDestination) PutManifest(manifest []byte) error {
+func (s *storageImageDestination) PutManifest(manifest []byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return ErrNoManifestLists
+	}
 	s.manifest = make([]byte, len(manifest))
 	copy(s.manifest, manifest)
 	return nil
@@ -720,7 +723,10 @@ func (s *storageImageDestination) MustMatchRuntimeOS() bool {
 }
 
 // PutSignatures records the image's signatures for committing as a single data blob.
-func (s *storageImageDestination) PutSignatures(signatures [][]byte) error {
+func (s *storageImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	if instanceDigest != nil {
+		return ErrNoManifestLists
+	}
 	sizes := []int{}
 	sigblob := []byte{}
 	for _, sig := range signatures {
