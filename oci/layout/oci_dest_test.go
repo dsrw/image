@@ -1,12 +1,15 @@
 package layout
 
 import (
+	"bytes"
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"path/filepath"
 
 	"github.com/containers/image/types"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,6 +97,7 @@ func TestPutManifestTwice(t *testing.T) {
 	ociRef, ok := ref.(ociReference)
 	require.True(t, ok)
 
+	putTestConfig(t, ociRef, tmpDir)
 	putTestManifest(t, ociRef, tmpDir)
 	putTestManifest(t, ociRef, tmpDir)
 
@@ -102,11 +106,33 @@ func TestPutManifestTwice(t *testing.T) {
 	assert.Equal(t, 1, len(index.Manifests), "Unexpected number of manifests")
 }
 
-func putTestManifest(t *testing.T, ociRef ociReference, tmpDir string) {
+func putTestConfig(t *testing.T, ociRef ociReference, tmpDir string) {
+	data, err := ioutil.ReadFile("../../image/fixtures/oci1-config.json")
+	assert.NoError(t, err)
 	imageDest, err := newImageDestination(nil, ociRef)
 	assert.NoError(t, err)
 
-	data := []byte("abc")
+	_, err = imageDest.PutBlob(bytes.NewReader(data), types.BlobInfo{Size: int64(len(data)), Digest: digest.FromBytes(data)})
+	assert.NoError(t, err)
+
+	err = imageDest.Commit()
+	assert.NoError(t, err)
+
+	paths := []string{}
+	filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+		paths = append(paths, path)
+		return nil
+	})
+
+	digest := digest.FromBytes(data).Hex()
+	assert.Contains(t, paths, filepath.Join(tmpDir, "blobs", "sha256", digest), "The OCI directory does not contain the new config data")
+}
+func putTestManifest(t *testing.T, ociRef ociReference, tmpDir string) {
+	data, err := ioutil.ReadFile("../../image/fixtures/oci1.json")
+	assert.NoError(t, err)
+	imageDest, err := newImageDestination(nil, ociRef)
+	assert.NoError(t, err)
+
 	err = imageDest.PutManifest(data, nil)
 	assert.NoError(t, err)
 
@@ -119,6 +145,28 @@ func putTestManifest(t *testing.T, ociRef ociReference, tmpDir string) {
 		return nil
 	})
 
-	digest := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	digest := digest.FromBytes(data).Hex()
 	assert.Contains(t, paths, filepath.Join(tmpDir, "blobs", "sha256", digest), "The OCI directory does not contain the new manifest data")
+}
+
+func putTestIndex(t *testing.T, ociRef ociReference, tmpDir string) {
+	data, err := ioutil.ReadFile("../../manifest/fixtures/ociv1.image.index.json")
+	assert.NoError(t, err)
+	imageDest, err := newImageDestination(nil, ociRef)
+	assert.NoError(t, err)
+
+	err = imageDest.PutManifest(data, nil)
+	assert.NoError(t, err)
+
+	err = imageDest.Commit()
+	assert.NoError(t, err)
+
+	paths := []string{}
+	filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+		paths = append(paths, path)
+		return nil
+	})
+
+	digest := digest.FromBytes(data).Hex()
+	assert.Contains(t, paths, filepath.Join(tmpDir, "blobs", "sha256", digest), "The OCI directory does not contain the new manifest index")
 }

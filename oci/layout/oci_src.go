@@ -18,6 +18,7 @@ import (
 
 type ociImageSource struct {
 	ref           ociReference
+	index         *imgspecv1.Index
 	descriptor    imgspecv1.Descriptor
 	client        *http.Client
 	sharedBlobDir string
@@ -41,7 +42,11 @@ func newImageSource(ctx *types.SystemContext, ref ociReference) (types.ImageSour
 	if err != nil {
 		return nil, err
 	}
-	d := &ociImageSource{ref: ref, descriptor: descriptor, client: client}
+	index, err := ref.getIndex()
+	if err != nil {
+		return nil, err
+	}
+	d := &ociImageSource{ref: ref, index: index, descriptor: descriptor, client: client}
 	if ctx != nil {
 		// TODO(jonboulle): check dir existence?
 		d.sharedBlobDir = ctx.OCISharedBlobDirPath
@@ -71,13 +76,15 @@ func (s *ociImageSource) GetManifest(instanceDigest *digest.Digest) ([]byte, str
 		mimeType = s.descriptor.MediaType
 	} else {
 		dig = *instanceDigest
-		// XXX: instanceDigest means that we don't immediately have the context of what
-		//      mediaType the manifest has. In OCI this means that we don't know
-		//      what reference it came from, so we just *assume* that its
-		//      MediaTypeImageManifest.
-		// FIXME: We should actually be able to look up the manifest in the index,
-		// and see the MIME type there.
-		mimeType = imgspecv1.MediaTypeImageManifest
+		for _, md := range s.index.Manifests {
+			if md.Digest == dig {
+				mimeType = md.MediaType
+				break
+			}
+		}
+		if mimeType == "" {
+			return nil, "", errors.Errorf("no manifest matching digest %q found in index", dig)
+		}
 	}
 
 	manifestPath, err := s.ref.blobPath(dig, s.sharedBlobDir)
