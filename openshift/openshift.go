@@ -397,10 +397,6 @@ func (d *openshiftImageDestination) ReapplyBlob(info types.BlobInfo) (types.Blob
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (d *openshiftImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "atomic:"`)
-	}
-
 	manifestDigest, err := manifest.Digest(m)
 	if err != nil {
 		return err
@@ -411,9 +407,6 @@ func (d *openshiftImageDestination) PutManifest(m []byte, instanceDigest *digest
 }
 
 func (d *openshiftImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "atomic:"`)
-	}
 	if d.imageStreamImageName == "" {
 		return errors.Errorf("Internal error: Unknown manifest digest, can't add signatures")
 	}

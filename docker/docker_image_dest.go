@@ -59,6 +59,7 @@ func (d *dockerImageDestination) SupportedManifestMIMETypes() []string {
 	return []string{
 		imgspecv1.MediaTypeImageManifest,
 		manifest.DockerV2Schema2MediaType,
+		manifest.DockerV2ListMediaType,
 		manifest.DockerV2Schema1SignedMediaType,
 		manifest.DockerV2Schema1MediaType,
 	}
@@ -214,19 +215,21 @@ func (d *dockerImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (d *dockerImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "docker:"`)
-	}
 	digest, err := manifest.Digest(m)
 	if err != nil {
 		return err
 	}
-	d.manifestDigest = digest
-
 	refTail, err := d.ref.tagOrDigest()
 	if err != nil {
 		return err
 	}
+	if instanceDigest != nil {
+		digest = *instanceDigest
+		refTail = instanceDigest.String()
+	} else {
+		d.manifestDigest = digest
+	}
+
 	path := fmt.Sprintf(manifestPath, reference.Path(d.ref.ref), refTail)
 
 	headers := map[string][]string{}
@@ -272,9 +275,6 @@ func isManifestInvalidError(err error) bool {
 }
 
 func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
-	if instanceDigest != nil {
-		return errors.New(`Manifest lists are not supported by "docker:"`)
-	}
 	// Do not fail if we don’t really need to support signatures.
 	if len(signatures) == 0 {
 		return nil
@@ -284,9 +284,9 @@ func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDige
 	}
 	switch {
 	case d.c.signatureBase != nil:
-		return d.putSignaturesToLookaside(signatures)
+		return d.putSignaturesToLookaside(signatures, instanceDigest)
 	case d.c.supportsSignatures:
-		return d.putSignaturesToAPIExtension(signatures)
+		return d.putSignaturesToAPIExtension(signatures, instanceDigest)
 	default:
 		return errors.Errorf("X-Registry-Supports-Signatures extension not supported, and lookaside is not configured")
 	}
@@ -294,7 +294,7 @@ func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDige
 
 // putSignaturesToLookaside implements PutSignatures() from the lookaside location configured in s.c.signatureBase,
 // which is not nil.
-func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte) error {
+func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte, instanceDigest *digest.Digest) error {
 	// FIXME? This overwrites files one at a time, definitely not atomic.
 	// A failure when updating signatures with a reordered copy could lose some of them.
 
@@ -303,14 +303,17 @@ func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte) e
 		return nil
 	}
 
-	if d.manifestDigest.String() == "" {
-		// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
-		return errors.Errorf("Unknown manifest digest, can't add signatures")
+	if instanceDigest == nil {
+		if d.manifestDigest.String() == "" {
+			// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
+			return errors.Errorf("Unknown manifest digest, can't add signatures")
+		}
+		instanceDigest = &d.manifestDigest
 	}
 
 	// NOTE: Keep this in sync with docs/signature-protocols.md!
 	for i, signature := range signatures {
-		url := signatureStorageURL(d.c.signatureBase, d.manifestDigest, i)
+		url := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
 		if url == nil {
 			return errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
 		}
@@ -325,7 +328,7 @@ func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte) e
 	// is enough for dockerImageSource to stop looking for other signatures, so that
 	// is sufficient.
 	for i := len(signatures); ; i++ {
-		url := signatureStorageURL(d.c.signatureBase, d.manifestDigest, i)
+		url := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
 		if url == nil {
 			return errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
 		}
@@ -385,22 +388,25 @@ func (c *dockerClient) deleteOneSignature(url *url.URL) (missing bool, err error
 }
 
 // putSignaturesToAPIExtension implements PutSignatures() using the X-Registry-Supports-Signatures API extension.
-func (d *dockerImageDestination) putSignaturesToAPIExtension(signatures [][]byte) error {
+func (d *dockerImageDestination) putSignaturesToAPIExtension(signatures [][]byte, instanceDigest *digest.Digest) error {
 	// Skip dealing with the manifest digest, or reading the old state, if not necessary.
 	if len(signatures) == 0 {
 		return nil
 	}
 
-	if d.manifestDigest.String() == "" {
-		// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
-		return errors.Errorf("Unknown manifest digest, can't add signatures")
+	if instanceDigest == nil {
+		if d.manifestDigest.String() == "" {
+			// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
+			return errors.Errorf("Unknown manifest digest, can't add signatures")
+		}
+		instanceDigest = &d.manifestDigest
 	}
 
 	// Because image signatures are a shared resource in Atomic Registry, the default upload
 	// always adds signatures.  Eventually we should also allow removing signatures,
 	// but the X-Registry-Supports-Signatures API extension does not support that yet.
 
-	existingSignatures, err := d.c.getExtensionsSignatures(context.TODO(), d.ref, d.manifestDigest)
+	existingSignatures, err := d.c.getExtensionsSignatures(context.TODO(), d.ref, *instanceDigest)
 	if err != nil {
 		return err
 	}
@@ -425,7 +431,7 @@ sigExists:
 			if err != nil || n != 16 {
 				return errors.Wrapf(err, "Error generating random signature len %d", n)
 			}
-			signatureName = fmt.Sprintf("%s@%032x", d.manifestDigest.String(), randBytes)
+			signatureName = fmt.Sprintf("%s@%032x", instanceDigest.String(), randBytes)
 			if _, ok := existingSigNames[signatureName]; !ok {
 				break
 			}
@@ -441,7 +447,7 @@ sigExists:
 			return err
 		}
 
-		path := fmt.Sprintf(extensionsSignaturePath, reference.Path(d.ref.ref), d.manifestDigest.String())
+		path := fmt.Sprintf(extensionsSignaturePath, reference.Path(d.ref.ref), instanceDigest.String())
 		res, err := d.c.makeRequest(context.TODO(), "PUT", path, nil, bytes.NewReader(body))
 		if err != nil {
 			return err

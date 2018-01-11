@@ -24,8 +24,8 @@ type dockerImageSource struct {
 	ref dockerReference
 	c   *dockerClient
 	// State
-	cachedManifest         []byte // nil if not loaded yet
-	cachedManifestMIMEType string // Only valid if cachedManifest != nil
+	cachedManifest         map[string][]byte // nil if not loaded yet
+	cachedManifestMIMEType map[string]string // Only valid if cachedManifest != nil
 }
 
 // newImageSource creates a new ImageSource for the specified image reference.
@@ -36,8 +36,10 @@ func newImageSource(ctx *types.SystemContext, ref dockerReference) (*dockerImage
 		return nil, err
 	}
 	return &dockerImageSource{
-		ref: ref,
-		c:   c,
+		ref:                    ref,
+		c:                      c,
+		cachedManifest:         make(map[string][]byte),
+		cachedManifestMIMEType: make(map[string]string),
 	}, nil
 }
 
@@ -70,19 +72,24 @@ func simplifyContentType(contentType string) string {
 	return mimeType
 }
 
+func (s *dockerImageSource) instanceFor(instanceDigest *digest.Digest) string {
+	if instanceDigest == nil {
+		return ""
+	}
+	return instanceDigest.String()
+}
+
 // GetManifest returns the image's manifest along with its MIME type (which may be empty when it can't be determined but the manifest is available).
 // It may use a remote (= slow) service.
 // If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve (when the primary manifest is a manifest list);
 // this never happens if the primary manifest is not a manifest list (e.g. if the source never returns manifest lists).
 func (s *dockerImageSource) GetManifest(instanceDigest *digest.Digest) ([]byte, string, error) {
-	if instanceDigest != nil {
-		return s.fetchManifest(context.TODO(), instanceDigest.String())
-	}
-	err := s.ensureManifestIsLoaded(context.TODO())
+	err := s.ensureManifestIsLoaded(context.TODO(), instanceDigest)
 	if err != nil {
 		return nil, "", err
 	}
-	return s.cachedManifest, s.cachedManifestMIMEType, nil
+	instance := s.instanceFor(instanceDigest)
+	return s.cachedManifest[instance], s.cachedManifestMIMEType[instance], nil
 }
 
 func (s *dockerImageSource) fetchManifest(ctx context.Context, tagOrDigest string) ([]byte, string, error) {
@@ -111,8 +118,9 @@ func (s *dockerImageSource) fetchManifest(ctx context.Context, tagOrDigest strin
 // we need to ensure that the digest of the manifest returned by GetManifest(nil)
 // and used by GetSignatures(ctx, nil) are consistent, otherwise we would get spurious
 // signature verification failures when pulling while a tag is being updated.
-func (s *dockerImageSource) ensureManifestIsLoaded(ctx context.Context) error {
-	if s.cachedManifest != nil {
+func (s *dockerImageSource) ensureManifestIsLoaded(ctx context.Context, instanceDigest *digest.Digest) error {
+	instance := s.instanceFor(instanceDigest)
+	if s.cachedManifest[instance] != nil {
 		return nil
 	}
 
@@ -120,14 +128,17 @@ func (s *dockerImageSource) ensureManifestIsLoaded(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if instanceDigest != nil {
+		reference = instanceDigest.String()
+	}
 
 	manblob, mt, err := s.fetchManifest(ctx, reference)
 	if err != nil {
 		return err
 	}
 	// We might validate manblob against the Docker-Content-Digest header here to protect against transport errors.
-	s.cachedManifest = manblob
-	s.cachedManifestMIMEType = mt
+	s.cachedManifest[instance] = manblob
+	s.cachedManifestMIMEType[instance] = mt
 	return nil
 }
 
@@ -210,10 +221,11 @@ func (s *dockerImageSource) manifestDigest(ctx context.Context, instanceDigest *
 			return d, nil
 		}
 	}
-	if err := s.ensureManifestIsLoaded(ctx); err != nil {
+	if err := s.ensureManifestIsLoaded(ctx, instanceDigest); err != nil {
 		return "", err
 	}
-	return manifest.Digest(s.cachedManifest)
+	instance := s.instanceFor(instanceDigest)
+	return manifest.Digest(s.cachedManifest[instance])
 }
 
 // getSignaturesFromLookaside implements GetSignatures() from the lookaside location configured in s.c.signatureBase,
