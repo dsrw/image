@@ -14,10 +14,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/containers/image/manifest"
 	"github.com/containers/image/types"
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/archive"
@@ -289,22 +291,22 @@ func TestWriteRead(t *testing.T) {
 		Size:   int64(len(config)),
 	}
 	manifests := []string{
-		//`{
-		//    "schemaVersion": 2,
-		//    "mediaType": "application/vnd.oci.image.manifest.v1+json",
-		//    "config": {
-		//	"mediaType": "application/vnd.oci.image.serialization.config.v1+json",
-		//	"size": %cs,
-		//	"digest": "%ch"
-		//    },
-		//    "layers": [
-		//	{
-		//	    "mediaType": "application/vnd.oci.image.serialization.rootfs.tar.gzip",
-		//	    "digest": "%lh",
-		//	    "size": %ls
-		//	}
-		//    ]
-		//}`,
+		`{
+		    "schemaVersion": 2,
+		    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+		    "config": {
+			"mediaType": "application/vnd.oci.image.serialization.config.v1+json",
+			"size": %configsize%,
+			"digest": "%confighash%"
+		    },
+		    "layers": [
+			{
+			    "mediaType": "application/vnd.oci.image.serialization.rootfs.tar.gzip",
+			    "digest": "%layerhash%",
+			    "size": %layersize%
+			}
+		    ]
+		}`,
 		`{
 		    "schemaVersion": 1,
 		    "name": "test",
@@ -312,12 +314,12 @@ func TestWriteRead(t *testing.T) {
 		    "architecture": "amd64",
 		    "fsLayers": [
 			{
-			    "blobSum": "%lh"
+			    "blobSum": "%layerhash%"
 			}
 		    ],
 		    "history": [
 			{
-				"v1Compatibility": "{\"id\":\"%li\",\"created\":\"2016-03-03T11:29:44.222098366Z\",\"container\":\"\",\"container_config\":{\"Hostname\":\"56f0fe1dfc95\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"ExposedPorts\":null,\"PublishService\":\"\",\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":null,\"Cmd\":[\"/bin/sh\"],\"Image\":\"\",\"Volumes\":null,\"VolumeDriver\":\"\",\"WorkingDir\":\"\",\"Entrypoint\":null,\"NetworkDisabled\":false,\"MacAddress\":\"\",\"OnBuild\":null,\"Labels\":{}},\"docker_version\":\"1.8.2-fc22\",\"author\":\"\\\"William Temple \\u003cwtemple at redhat dot com\\u003e\\\"\",\"config\":{\"Hostname\":\"56f0fe1dfc95\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"ExposedPorts\":null,\"PublishService\":\"\",\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":null,\"Cmd\":null,\"Image\":\"\",\"Volumes\":null,\"VolumeDriver\":\"\",\"WorkingDir\":\"\",\"Entrypoint\":null,\"NetworkDisabled\":false,\"MacAddress\":\"\",\"OnBuild\":null,\"Labels\":{}},\"architecture\":\"amd64\",\"os\":\"linux\",\"Size\":%ls}"
+				"v1Compatibility": "{\"id\":\"%layerid%\",\"created\":\"2016-03-03T11:29:44.222098366Z\",\"container\":\"\",\"container_config\":{\"Hostname\":\"56f0fe1dfc95\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"ExposedPorts\":null,\"PublishService\":\"\",\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":null,\"Cmd\":[\"/bin/sh\"],\"Image\":\"\",\"Volumes\":null,\"VolumeDriver\":\"\",\"WorkingDir\":\"\",\"Entrypoint\":null,\"NetworkDisabled\":false,\"MacAddress\":\"\",\"OnBuild\":null,\"Labels\":{}},\"docker_version\":\"1.8.2-fc22\",\"author\":\"\\\"William Temple \\u003cwtemple at redhat dot com\\u003e\\\"\",\"config\":{\"Hostname\":\"56f0fe1dfc95\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"ExposedPorts\":null,\"PublishService\":\"\",\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":null,\"Cmd\":null,\"Image\":\"\",\"Volumes\":null,\"VolumeDriver\":\"\",\"WorkingDir\":\"\",\"Entrypoint\":null,\"NetworkDisabled\":false,\"MacAddress\":\"\",\"OnBuild\":null,\"Labels\":{}},\"architecture\":\"amd64\",\"os\":\"linux\",\"Size\":%layersize%}"
 			}
 		    ]
 		}`,
@@ -326,14 +328,14 @@ func TestWriteRead(t *testing.T) {
 		    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
 		    "config": {
 			"mediaType": "application/vnd.docker.container.image.v1+json",
-			"size": %cs,
-			"digest": "%ch"
+			"size": %configsize%,
+			"digest": "%confighash%"
 		    },
 		    "layers": [
 			{
 			    "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
-			    "digest": "%lh",
-			    "size": %ls
+			    "digest": "%layerhash%",
+			    "size": %layersize%
 			}
 		    ]
 		}`,
@@ -382,13 +384,12 @@ func TestWriteRead(t *testing.T) {
 		if _, err := dest.PutBlob(bytes.NewBufferString(config), configInfo); err != nil {
 			t.Fatalf("Error saving config to destination: %v", err)
 		}
-		manifest := strings.Replace(manifestFmt, "%lh", digest.String(), -1)
-		manifest = strings.Replace(manifest, "%ch", configInfo.Digest.String(), -1)
-		manifest = strings.Replace(manifest, "%ls", fmt.Sprintf("%d", size), -1)
-		manifest = strings.Replace(manifest, "%cs", fmt.Sprintf("%d", configInfo.Size), -1)
+		manifest := strings.Replace(manifestFmt, "%layerhash%", digest.String(), -1)
+		manifest = strings.Replace(manifest, "%confighash%", configInfo.Digest.String(), -1)
+		manifest = strings.Replace(manifest, "%layersize%", fmt.Sprintf("%d", size), -1)
+		manifest = strings.Replace(manifest, "%configsize%", fmt.Sprintf("%d", configInfo.Size), -1)
 		li := digest.Hex()
-		manifest = strings.Replace(manifest, "%li", li, -1)
-		manifest = strings.Replace(manifest, "%ci", sum.Hex(), -1)
+		manifest = strings.Replace(manifest, "%layerid%", li, -1)
 		t.Logf("this manifest is %q", manifest)
 		if err := dest.PutManifest([]byte(manifest), nil); err != nil {
 			t.Fatalf("Error saving manifest to destination: %v", err)
@@ -451,11 +452,11 @@ func TestWriteRead(t *testing.T) {
 		}
 		t.Logf("this manifest's type appears to be %q", manifestType)
 		sum = ddigest.SHA256.FromBytes([]byte(manifest))
-		_, _, err = src.GetManifest(&sum)
-		if err == nil {
-			t.Fatalf("GetManifest(%q) with an instanceDigest is supposed to fail", ref.StringWithinTransport())
+		_, manifestType, err = src.GetManifest(&sum)
+		if err != nil {
+			t.Fatalf("GetManifest(%q) returned error %v", ref.StringWithinTransport(), err)
 		}
-		sigs, err := src.GetSignatures(context.Background(), nil)
+		sigs, err := src.GetSignatures(context.Background(), &sum)
 		if err != nil {
 			t.Fatalf("GetSignatures(%q) returned error %v", ref.StringWithinTransport(), err)
 		}
@@ -471,8 +472,8 @@ func TestWriteRead(t *testing.T) {
 			}
 		}
 		_, err = src.GetSignatures(context.Background(), &sum)
-		if err == nil {
-			t.Fatalf("GetSignatures(%q) with instanceDigest is supposed to fail", ref.StringWithinTransport())
+		if err != nil {
+			t.Fatalf("GetSignatures(%q) returned error %v", ref.StringWithinTransport(), err)
 		}
 		for _, layerInfo := range layerInfos {
 			buf := bytes.Buffer{}
@@ -502,6 +503,341 @@ func TestWriteRead(t *testing.T) {
 		}
 		src.Close()
 		img.Close()
+		err = ref.DeleteImage(systemContext())
+		if err != nil {
+			t.Fatalf("DeleteImage(%q) returned error %v", ref.StringWithinTransport(), err)
+		}
+	}
+}
+
+func TestWriteReadMulti(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("TestWriteReadMulti requires root privileges")
+	}
+
+	imageGroups := [][]struct {
+		config, manifest string
+		signatures       [][]byte
+	}{
+		{{
+			manifest: `{
+			    "schemaVersion": 2,
+			    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+			    "config": {
+				"mediaType": "application/vnd.docker.container.image.v1+json",
+				"size": %configsize%,
+				"digest": "%confighash%"
+			    },
+			    "layers": [
+				{
+				    "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+				    "digest": "%layerhash%",
+				    "size": %layersize%
+				}
+			    ]
+			}`,
+			signatures: [][]byte{
+				[]byte("Signature A1"),
+				[]byte("Signature B1"),
+			}}, {
+			manifest: `{
+			    "schemaVersion": 2,
+			    "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+			    "manifests": [
+				{
+				    "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+				    "size": %manifestsize%,
+				    "digest": "%manifesthash%",
+				    "platform": {
+					"architecture": "%arch%",
+					"os": "%os%"
+				    }
+				}
+			    ]
+			}`,
+			signatures: [][]byte{
+				[]byte("Signature A1"),
+				[]byte("Signature B1"),
+			},
+		}}, {{
+			manifest: `{
+			    "schemaVersion": 2,
+			    "config": {
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"size": %configsize%,
+				"digest": "%confighash%"
+			    },
+			    "layers": [
+				{
+				    "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				    "digest": "%layerhash%",
+				    "size": %layersize%
+				}
+			    ],
+			    "annotations": {
+				"org.opencontainers.image.ref.name": "kittens"
+			    }
+			}`,
+			signatures: [][]byte{
+				[]byte("Signature A1"),
+				[]byte("Signature B1"),
+			}}, {
+			manifest: `{
+			    "schemaVersion": 2,
+			    "config": {
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"size": %configsize%,
+				"digest": "%confighash%"
+			    },
+			    "layers": [
+				{
+				    "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				    "digest": "%layerhash%",
+				    "size": %layersize%
+				}
+			    ],
+			    "annotations": {
+				"org.opencontainers.image.ref.name": "puppies"
+			    }
+			}`,
+			signatures: [][]byte{
+				[]byte("Signature A1"),
+				[]byte("Signature B1"),
+			}}, {
+			manifest: `{
+			    "schemaVersion": 2,
+			    "manifests": [
+				{
+				    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+				    "size": %manifestsize%,
+				    "digest": "%manifesthash%",
+				    "platform": {
+					"architecture": "%arch%",
+					"os": "%os%"
+				    },
+				    "annotations": {
+					"org.opencontainers.image.ref.name": "tag1"
+				    }
+				},
+				{
+				    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+				    "size": %manifestsize%,
+				    "digest": "%manifesthash%",
+				    "platform": {
+					"architecture": "%arch%",
+					"os": "%os%"
+				    },
+				    "annotations": {
+					"org.opencontainers.image.ref.name": "tag2"
+				    }
+				}
+			    ],
+			    "annotations": {
+				"com.example.key1": "value1",
+				"com.example.key2": "value2"
+			    }
+			}`,
+			signatures: [][]byte{
+				[]byte("Signature A1"),
+				[]byte("Signature B1"),
+			},
+		}},
+	}
+	newStore(t)
+	ref, err := Transport.ParseReference("test")
+	if err != nil {
+		t.Fatalf("ParseReference(%q) returned error %v", "test", err)
+	}
+	if ref == nil {
+		t.Fatalf("ParseReference returned nil reference")
+	}
+
+	for i := range imageGroups {
+		imageGroup := &imageGroups[i]
+		dest, err := ref.NewImageDestination(systemContext())
+		if err != nil {
+			t.Fatalf("NewImageDestination(%q) returned error %v", ref.StringWithinTransport(), err)
+		}
+		if dest == nil {
+			t.Fatalf("NewImageDestination(%q) returned no destination", ref.StringWithinTransport())
+		}
+		compression := archive.Uncompressed
+		if dest.ShouldCompressLayers() {
+			compression = archive.Gzip
+		}
+		digest, decompressedSize, size, blob := makeLayer(t, compression)
+		if _, err := dest.PutBlob(bytes.NewBuffer(blob), types.BlobInfo{
+			Size:   size,
+			Digest: digest,
+		}); err != nil {
+			t.Fatalf("Error saving randomly-generated layer to destination: %v", err)
+		}
+		t.Logf("Wrote randomly-generated layer %q (%d/%d bytes) to destination", digest, size, decompressedSize)
+		subManifest := ""
+		for j := range (*imageGroup)[:len(*imageGroup)-1] {
+			memberImage := &((*imageGroup)[j])
+			config := fmt.Sprintf(`{"config":{"labels":{}},"created":"%s"}`, time.Now().UTC())
+			sum := ddigest.SHA256.FromBytes([]byte(config))
+			configInfo := types.BlobInfo{
+				Digest: sum,
+				Size:   int64(len(config)),
+			}
+			if _, err := dest.PutBlob(bytes.NewBufferString(config), configInfo); err != nil {
+				t.Fatalf("Error saving config to destination: %v", err)
+			}
+			memberImage.config = config
+			subManifest = strings.Replace(memberImage.manifest, "%layerhash%", digest.String(), -1)
+			subManifest = strings.Replace(subManifest, "%confighash%", configInfo.Digest.String(), -1)
+			subManifest = strings.Replace(subManifest, "%layersize%", fmt.Sprintf("%d", size), -1)
+			subManifest = strings.Replace(subManifest, "%configsize%", fmt.Sprintf("%d", configInfo.Size), -1)
+			subManifest = strings.Replace(subManifest, "%arch%", runtime.GOARCH, -1)
+			subManifest = strings.Replace(subManifest, "%os%", runtime.GOOS, -1)
+			t.Logf("this submanifest is %q", subManifest)
+			memberImage.manifest = subManifest
+			subManifestDigest := ddigest.FromBytes([]byte(subManifest))
+			if err := dest.PutManifest([]byte(subManifest), &subManifestDigest); err != nil {
+				t.Fatalf("Error saving member image manifest to destination: %v", err)
+			}
+			if err := dest.PutSignatures(memberImage.signatures, &subManifestDigest); err != nil {
+				t.Fatalf("Error saving member image signatures to destination: %v", err)
+			}
+		}
+		subManifestDigest := ddigest.FromBytes([]byte(subManifest))
+		memberImage := &((*imageGroup)[len(*imageGroup)-1])
+		listManifest := strings.Replace(memberImage.manifest, "%manifestsize%", fmt.Sprintf("%d", len(subManifest)), -1)
+		listManifest = strings.Replace(listManifest, "%manifesthash%", subManifestDigest.String(), -1)
+		listManifest = strings.Replace(listManifest, "%arch%", runtime.GOARCH, -1)
+		listManifest = strings.Replace(listManifest, "%os%", runtime.GOOS, -1)
+		t.Logf("this list manifest is %q", listManifest)
+		memberImage.manifest = listManifest
+		if err := dest.PutManifest([]byte(listManifest), nil); err != nil {
+			t.Fatalf("Error saving member image manifest to destination: %v", err)
+		}
+		if err := dest.PutSignatures(memberImage.signatures, nil); err != nil {
+			t.Fatalf("Error saving member image signatures to destination: %v", err)
+		}
+		if err := dest.Commit(); err != nil {
+			t.Fatalf("Error committing changes to destination: %v", err)
+		}
+		dest.Close()
+
+		src, err := ref.NewImageSource(systemContext())
+		if err != nil {
+			t.Fatalf("NewImageSource(%q) returned error %v", ref.StringWithinTransport(), err)
+		}
+		if src == nil {
+			t.Fatalf("NewImageSource(%q) returned no source", ref.StringWithinTransport())
+		}
+		mainManifest, mainType, err := src.GetManifest(nil)
+		if err != nil {
+			t.Fatalf("image %q unable to read its 'main' manifest: %v", ref.StringWithinTransport(), err)
+		}
+		if !manifest.MIMETypeIsMultiImage(mainType) {
+			t.Fatalf("image %q manifest should be multiple manifests: %v", ref.StringWithinTransport(), err)
+		}
+		t.Logf("this manifest's main type appears to be %q", mainType)
+		list, err := manifest.ListFromBlob(mainManifest, mainType)
+		if err != nil {
+			t.Fatalf("ListFromBlob(%q) returned error  %v", ref.StringWithinTransport(), err)
+		}
+		instances := list.Instances()
+		if len(instances) != len(*imageGroup)-1 {
+			t.Fatalf("Expected to find %d instances, found %d in %q", len(*imageGroup)-1, len(instances), ref.StringWithinTransport())
+		}
+		for _, sub := range instances {
+			memberImage = nil
+			for i := range *imageGroup {
+				if sub.Digest == ddigest.FromBytes([]byte(((*imageGroup)[i]).manifest)) {
+					memberImage = &((*imageGroup)[i])
+					break
+				}
+			}
+			if memberImage == nil {
+				t.Fatalf("Unable to find subimage for manifest %s", sub.Digest.String())
+			}
+			sigs, err := src.GetSignatures(context.Background(), &sub.Digest)
+			if err != nil {
+				t.Fatalf("GetSignatures(%q) returned error %v", ref.StringWithinTransport(), err)
+			}
+			if len(sigs) < len(memberImage.signatures) {
+				t.Fatalf("Lost %d signatures", len(memberImage.signatures)-len(sigs))
+			}
+			if len(sigs) > len(memberImage.signatures) {
+				t.Fatalf("Gained %d signatures", len(sigs)-len(memberImage.signatures))
+			}
+			for i := range sigs {
+				if bytes.Compare(sigs[i], memberImage.signatures[i]) != 0 {
+					t.Fatalf("Signature %d was corrupted", i)
+				}
+			}
+			subManifest, subType, err := src.GetManifest(&sub.Digest)
+			if err != nil {
+				t.Fatalf("GetManifest(%q) returned error %v", ref.StringWithinTransport(), err)
+			}
+			if manifest.MIMETypeIsMultiImage(subType) {
+				t.Fatalf("image %q manifest %q should not be multiple manifests: %v", ref.StringWithinTransport(), sub.Digest.String(), err)
+			}
+			if ddigest.FromBytes(subManifest) != ddigest.FromBytes([]byte(memberImage.manifest)) {
+				t.Fatalf("Manifest for sub %s was corrupted", sub.Digest.String())
+			}
+			subMan, err := manifest.FromBlob(subManifest, subType)
+			if err != nil {
+				t.Fatalf("FromBlob(%q) returned error  %v", ref.StringWithinTransport(), err)
+			}
+			for _, layerInfo := range subMan.LayerInfos() {
+				buf := bytes.Buffer{}
+				layer, size, err := src.GetBlob(layerInfo)
+				if err != nil {
+					t.Fatalf("Error reading layer %q from %q", layerInfo.Digest, ref.StringWithinTransport())
+				}
+				t.Logf("Decompressing blob %q, blob size = %d, layerInfo.Size = %d bytes", layerInfo.Digest, size, layerInfo.Size)
+				hasher := sha256.New()
+				compressed := ioutils.NewWriteCounter(hasher)
+				countedLayer := io.TeeReader(layer, compressed)
+				decompressed, err := archive.DecompressStream(countedLayer)
+				if err != nil {
+					t.Fatalf("Error decompressing layer %q from %q", layerInfo.Digest, ref.StringWithinTransport())
+				}
+				n, err := io.Copy(&buf, decompressed)
+				if layerInfo.Size >= 0 && compressed.Count != layerInfo.Size {
+					t.Fatalf("Blob size is different than expected: %d != %d, read %d", compressed.Count, layerInfo.Size, n)
+				}
+				if size >= 0 && compressed.Count != size {
+					t.Fatalf("Blob size mismatch: %d != %d, read %d", compressed.Count, size, n)
+				}
+				sum := hasher.Sum(nil)
+				if ddigest.NewDigestFromBytes(ddigest.SHA256, sum) != layerInfo.Digest {
+					t.Fatalf("Layer blob digest for %q doesn't match", ref.StringWithinTransport())
+				}
+			}
+		}
+		memberImage = &((*imageGroup)[len(*imageGroup)-1])
+		sigs, err := src.GetSignatures(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("GetSignatures(%q) returned error %v", ref.StringWithinTransport(), err)
+		}
+		if len(sigs) < len(memberImage.signatures) {
+			t.Fatalf("Lost %d signatures", len(memberImage.signatures)-len(sigs))
+		}
+		if len(sigs) > len(memberImage.signatures) {
+			t.Fatalf("Gained %d signatures", len(sigs)-len(memberImage.signatures))
+		}
+		for i := range sigs {
+			if bytes.Compare(sigs[i], memberImage.signatures[i]) != 0 {
+				t.Fatalf("Signature %d was corrupted", i)
+			}
+		}
+		subMan, subType, err := src.GetManifest(nil)
+		if err != nil {
+			t.Fatalf("GetManifest(%q) returned error %v", ref.StringWithinTransport(), err)
+		}
+		if !manifest.MIMETypeIsMultiImage(subType) {
+			t.Fatalf("image %q manifest should be multiple manifests: %v", ref.StringWithinTransport(), err)
+		}
+		if !bytes.Equal(subMan, []byte(memberImage.manifest)) {
+			t.Fatalf("image %q manifest was changed: %v", ref.StringWithinTransport(), err)
+		}
+		src.Close()
 		err = ref.DeleteImage(systemContext())
 		if err != nil {
 			t.Fatalf("DeleteImage(%q) returned error %v", ref.StringWithinTransport(), err)
