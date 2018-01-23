@@ -286,6 +286,15 @@ func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDige
 	if len(signatures) == 0 {
 		return nil
 	}
+
+	if instanceDigest == nil {
+		if d.manifestDigest.String() == "" {
+			// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
+			return errors.Errorf("Unknown manifest digest, can't add signatures")
+		}
+		instanceDigest = &d.manifestDigest
+	}
+
 	if err := d.c.detectProperties(context.TODO()); err != nil {
 		return err
 	}
@@ -308,14 +317,6 @@ func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte, i
 	// Skip dealing with the manifest digest if not necessary.
 	if len(signatures) == 0 {
 		return nil
-	}
-
-	if instanceDigest == nil {
-		if d.manifestDigest.String() == "" {
-			// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
-			return errors.Errorf("Unknown manifest digest, can't add signatures")
-		}
-		instanceDigest = &d.manifestDigest
 	}
 
 	// NOTE: Keep this in sync with docs/signature-protocols.md!
@@ -399,14 +400,6 @@ func (d *dockerImageDestination) putSignaturesToAPIExtension(signatures [][]byte
 	// Skip dealing with the manifest digest, or reading the old state, if not necessary.
 	if len(signatures) == 0 {
 		return nil
-	}
-
-	if instanceDigest == nil {
-		if d.manifestDigest.String() == "" {
-			// This shouldn’t happen, ImageDestination users are required to call PutManifest before PutSignatures
-			return errors.Errorf("Unknown manifest digest, can't add signatures")
-		}
-		instanceDigest = &d.manifestDigest
 	}
 
 	// Because image signatures are a shared resource in Atomic Registry, the default upload
