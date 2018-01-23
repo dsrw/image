@@ -31,6 +31,7 @@ func TestGetPutManifest(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	man := []byte("test-manifest")
+	list := []byte("test-manifest-list")
 	md, err := manifest.Digest(man)
 	require.NoError(t, err)
 	dest, err := ref.NewImageDestination(nil)
@@ -38,7 +39,7 @@ func TestGetPutManifest(t *testing.T) {
 	defer dest.Close()
 	err = dest.PutManifest(man, &md)
 	assert.NoError(t, err)
-	err = dest.PutManifest(man, nil)
+	err = dest.PutManifest(list, nil)
 	assert.NoError(t, err)
 	err = dest.Commit()
 	assert.NoError(t, err)
@@ -48,10 +49,10 @@ func TestGetPutManifest(t *testing.T) {
 	defer src.Close()
 	m, mt, err := src.GetManifest(nil)
 	assert.NoError(t, err)
-	assert.Equal(t, man, m)
+	assert.Equal(t, list, m)
 	assert.Equal(t, "", mt)
 
-	_, _, err = src.GetManifest(&md)
+	m, mt, err = src.GetManifest(&md)
 	assert.NoError(t, err)
 	assert.Equal(t, man, m)
 	assert.Equal(t, "", mt)
@@ -147,6 +148,10 @@ func TestGetPutSignatures(t *testing.T) {
 		[]byte("sig1"),
 		[]byte("sig2"),
 	}
+	listSignatures := [][]byte{
+		[]byte("sig3"),
+		[]byte("sig4"),
+	}
 	md, err := manifest.Digest(man)
 	require.NoError(t, err)
 
@@ -157,7 +162,7 @@ func TestGetPutSignatures(t *testing.T) {
 	err = dest.PutManifest(man, &md)
 	require.NoError(t, err)
 
-	err = dest.PutSignatures(signatures, nil)
+	err = dest.PutSignatures(listSignatures, nil)
 	assert.NoError(t, err)
 	err = dest.PutSignatures(signatures, &md)
 	assert.NoError(t, err)
@@ -169,7 +174,7 @@ func TestGetPutSignatures(t *testing.T) {
 	defer src.Close()
 	sigs, err := src.GetSignatures(context.Background(), nil)
 	assert.NoError(t, err)
-	assert.Equal(t, signatures, sigs)
+	assert.Equal(t, listSignatures, sigs)
 
 	sigs, err = src.GetSignatures(context.Background(), &md)
 	assert.NoError(t, err)
