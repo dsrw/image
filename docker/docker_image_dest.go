@@ -215,19 +215,26 @@ func (d *dockerImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (d *dockerImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
-	digest, err := manifest.Digest(m)
-	if err != nil {
-		return err
-	}
-	refTail, err := d.ref.tagOrDigest()
-	if err != nil {
-		return err
-	}
+	refTail := ""
 	if instanceDigest != nil {
-		digest = *instanceDigest
+		// If the instanceDigest is provided, then use it as the reftail, as the reference,
+		// whether it includes a tag or a digest, refers to the list as a whole, and not this
+		// particular instance.
 		refTail = instanceDigest.String()
 	} else {
+		// Compute the digest of the main manifest, or the list if it's a list, so that we
+		// have a digest value to use if we're asked to save a signature for the manifest.
+		digest, err := manifest.Digest(m)
+		if err != nil {
+			return err
+		}
 		d.manifestDigest = digest
+		// The refTail should be either a digest (which we expect to match the value we just
+		// computed) or a tag name.
+		refTail, err = d.ref.tagOrDigest()
+		if err != nil {
+			return err
+		}
 	}
 
 	path := fmt.Sprintf(manifestPath, reference.Path(d.ref.ref), refTail)
