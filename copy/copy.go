@@ -91,6 +91,17 @@ type imageCopier struct {
 	canModifyManifest bool
 }
 
+const (
+	// CopyOnlyCurrentRuntimeImage, when set in Options.MultipleImages, indicates that the
+	// caller expects only one image to be copied, so if the source reference refers to a
+	// list of images, one that matches the current system will be selected.
+	CopyOnlyCurrentRuntimeImage = iota
+	// CopyAllImages, when set in Options.MultipleImages, indicates that the caller expects
+	// to copy multiple images, and if the source reference refers to a list of images, but
+	// the target reference can only accept one image, an error should be returned.
+	CopyAllImages
+)
+
 // Options allows supplying non-default configuration modifying the behavior of CopyImage.
 type Options struct {
 	RemoveSignatures bool   // Remove any pre-existing signatures. SignBy will still add a new signature.
@@ -102,7 +113,7 @@ type Options struct {
 	Progress         chan types.ProgressProperties // Reported to when ProgressInterval has arrived for a single artifact+offset.
 	// manifest MIME type of image set by user. "" is default and means use the autodetection to the the manifest MIME type
 	ForceManifestMIMEType string
-	MultipleImages        bool // If set, expect to copy multiple images
+	MultipleImages        int // set to either CopyOnlyCurrentRuntimeImage or CopyAllImages
 }
 
 // Image copies image from srcRef to destRef, using policyContext to validate
@@ -117,6 +128,9 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 		options = &Options{}
 	}
 
+	if options.MultipleImages != CopyAllImages && options.MultipleImages != CopyOnlyCurrentRuntimeImage {
+		return errors.Errorf("Invalid value for options.MultipleImages: %d", options.MultipleImages)
+	}
 	reportWriter := ioutil.Discard
 
 	if options.ReportWriter != nil {
@@ -166,10 +180,10 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 		}
 	} else {
 		// If we were asked to copy multiple images and can't, that's an error.
-		if options.MultipleImages && !supportsMultipleImages(c.dest) {
+		if options.MultipleImages == CopyAllImages && !supportsMultipleImages(c.dest) {
 			return errors.Errorf("Error copying multiple images: destination reference %q does not support multiple images", transports.ImageName(destRef))
 		}
-		if !supportsMultipleImages(c.dest) || !options.MultipleImages {
+		if !supportsMultipleImages(c.dest) || options.MultipleImages == CopyOnlyCurrentRuntimeImage {
 			// This is a manifest list, and we weren't asked to copy multiple images. Choose a single image and copy it.
 			instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
 			if err != nil {
