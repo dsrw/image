@@ -1,9 +1,9 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/containers/image/types"
 	digest "github.com/opencontainers/go-digest"
@@ -110,10 +110,10 @@ func ChooseManifestInstanceFromManifestList(ctx *types.SystemContext, manifests 
 // computeListID computes an image ID using the list of images referred to in a ManifestList.
 func computeListID(manifests ManifestList) string {
 	instances := manifests.Instances()
-	hexes := make([]string, len(instances))
+	digests := make([][]byte, len(instances))
 	for i, manifest := range manifests.Instances() {
-		hexes[i] = manifest.Digest.Hex()
+		digests[i] = []byte(manifest.Digest.String())
 	}
-	sort.Strings(hexes)
-	return digest.FromBytes([]byte(strings.Join(hexes, ""))).Hex()
+	sort.Slice(digests, func(i, j int) bool { return bytes.Compare(digests[i], digests[j]) < 0 })
+	return digest.FromBytes(bytes.Join(digests, []byte{0})).Hex()
 }
