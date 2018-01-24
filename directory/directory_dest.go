@@ -182,6 +182,10 @@ func (d *dirImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, 
 }
 
 // PutManifest writes manifest to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
@@ -189,6 +193,9 @@ func (d *dirImageDestination) PutManifest(manifest []byte, instanceDigest *diges
 	return ioutil.WriteFile(d.ref.manifestPath(instanceDigest), manifest, 0644)
 }
 
+// PutSignatures writes a set of signatures to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (d *dirImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	for i, sig := range signatures {
 		if err := ioutil.WriteFile(d.ref.signaturePath(i, instanceDigest), sig, 0644); err != nil {

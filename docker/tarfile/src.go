@@ -249,8 +249,8 @@ func (s *Source) prepareLayerData(tarManifest *ManifestItem, parsedConfig *manif
 
 // GetManifest returns the image's manifest along with its MIME type (which may be empty when it can't be determined but the manifest is available).
 // It may use a remote (= slow) service.
-// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve (when the primary manifest is a manifest list);
-// this never happens if the primary manifest is not a manifest list (e.g. if the source never returns manifest lists).
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as the primary manifest can not be a list, so there can be no secondary instances.
 func (s *Source) GetManifest(instanceDigest *digest.Digest) ([]byte, string, error) {
 	if instanceDigest != nil {
 		// How did we even get here? GetManifest(nil) has returned a manifest.DockerV2Schema2MediaType.
@@ -354,9 +354,8 @@ func (s *Source) GetBlob(info types.BlobInfo) (io.ReadCloser, int64, error) {
 }
 
 // GetSignatures returns the image's signatures.  It may use a remote (= slow) service.
-// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve signatures for
-// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
-// (e.g. if the source never returns manifest lists).
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as there can be no secondary manifests.
 func (s *Source) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error) {
 	if instanceDigest != nil {
 		// How did we even get here? GetManifest(nil) has returned a manifest.DockerV2Schema2MediaType.
@@ -365,7 +364,13 @@ func (s *Source) GetSignatures(ctx context.Context, instanceDigest *digest.Diges
 	return [][]byte{}, nil
 }
 
-// LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
+// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+// to read the image's layers.
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as the primary manifest can not be a list, so there can be no secondary manifests.
+// The Digest field is guaranteed to be provided; Size may be -1.
+// WARNING: The list may contain duplicates, and they are semantically relevant.
 func (s *Source) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }

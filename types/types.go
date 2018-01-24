@@ -126,7 +126,12 @@ type ImageSource interface {
 	// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
 	// (e.g. if the source never returns manifest lists).
 	GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error)
-	// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer blobsums that are listed in the image's manifest.
+	// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+	// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+	// to read the image's layers.
+	// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve BlobInfos for
+	// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
+	// (e.g. if the source never returns manifest lists).
 	// The Digest field is guaranteed to be provided; Size may be -1.
 	// WARNING: The list may contain duplicates, and they are semantically relevant.
 	LayerInfosForCopy(instanceDigest *digest.Digest) []BlobInfo
@@ -177,10 +182,18 @@ type ImageDestination interface {
 	// ReapplyBlob informs the image destination that a blob for which HasBlob previously returned true would have been passed to PutBlob if it had returned false.  Like HasBlob and unlike PutBlob, the digest can not be empty.  If the blob is a filesystem layer, this signifies that the changes it describes need to be applied again when composing a filesystem tree.
 	ReapplyBlob(info BlobInfo) (BlobInfo, error)
 	// PutManifest writes manifest to the destination.
+	// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write the manifest for
+	// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+	// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+	// by `manifest.Digest()`.
 	// FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 	// If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 	// but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 	PutManifest(manifest []byte, instanceDigest *digest.Digest) error
+	// PutSignatures writes a set of signatures to the destination.
+	// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+	// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+	// MUST be called after PutManifest (signatures may reference manifest contents).
 	PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error
 	// Commit marks the process of storing the image as successful and asks for the image to be persisted.
 	// WARNING: This does not have any transactional semantics:

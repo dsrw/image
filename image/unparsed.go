@@ -94,7 +94,9 @@ func (i *UnparsedImage) Signatures(ctx context.Context) ([][]byte, error) {
 	return i.cachedSignatures, nil
 }
 
-// LayerInfosForCopy returns an updated set of layer blob information which may not match the manifest.
+// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+// to read the image's layers.
 // The Digest field is guaranteed to be provided; Size may be -1.
 // WARNING: The list may contain duplicates, and they are semantically relevant.
 func (i *UnparsedImage) LayerInfosForCopy() []types.BlobInfo {

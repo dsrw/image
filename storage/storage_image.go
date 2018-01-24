@@ -219,8 +219,14 @@ func (s *storageImageSource) GetManifest(instanceDigest *digest.Digest) (manifes
 	return cached, s.manifestTypes[instance], err
 }
 
-// LayerInfosForCopy() returns the list of layer blobs that make up the root filesystem of
-// the image, after they've been decompressed.
+// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+// to read the image's layers.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve BlobInfos for
+// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
+// (e.g. if the source never returns manifest lists).
+// The Digest field is guaranteed to be provided; Size may be -1.
+// WARNING: The list may contain duplicates, and they are semantically relevant.
 func (s *storageImageSource) LayerInfosForCopy(instanceDigest *digest.Digest) []types.BlobInfo {
 	imageID, err := s.imageIDFor(instanceDigest)
 	if err != nil {
@@ -272,6 +278,9 @@ func (s *storageImageSource) LayerInfosForCopy(instanceDigest *digest.Digest) []
 }
 
 // GetSignatures() parses the image's signatures blob into a slice of byte slices.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve signatures for
+// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
+// (e.g. if the source never returns manifest lists).
 func (s *storageImageSource) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) (signatures [][]byte, err error) {
 	var offset int
 	sigslice := [][]byte{}
@@ -923,6 +932,13 @@ func (s *storageImageDestination) instanceFor(instanceDigest *digest.Digest) str
 }
 
 // PutManifest writes the manifest to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
+// FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
+// If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
+// but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (s *storageImageDestination) PutManifest(manifestBytes []byte, instanceDigest *digest.Digest) error {
 	instance := s.instanceFor(instanceDigest)
 	m := make([]byte, len(manifestBytes))
@@ -961,6 +977,8 @@ func (s *storageImageDestination) MustMatchRuntimeOS() bool {
 }
 
 // PutSignatures records the image's signatures for committing as a single data blob.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (s *storageImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	sizes := []int{}
 	sigblob := []byte{}

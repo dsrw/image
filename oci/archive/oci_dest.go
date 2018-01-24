@@ -87,11 +87,18 @@ func (d *ociArchiveImageDestination) ReapplyBlob(info types.BlobInfo) (types.Blo
 	return d.unpackedDest.ReapplyBlob(info)
 }
 
-// PutManifest writes manifest to the destination
+// PutManifest writes the manifest to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
 func (d *ociArchiveImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
 	return d.unpackedDest.PutManifest(m, instanceDigest)
 }
 
+// PutSignatures writes a set of signatures to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (d *ociArchiveImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	return d.unpackedDest.PutSignatures(signatures, instanceDigest)
 }

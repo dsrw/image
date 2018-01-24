@@ -246,7 +246,14 @@ func (s *openshiftImageSource) GetSignatures(ctx context.Context, instanceDigest
 	return sigs, nil
 }
 
-// LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
+// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+// to read the image's layers.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to retrieve BlobInfos for
+// (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
+// (e.g. if the source never returns manifest lists).
+// The Digest field is guaranteed to be provided; Size may be -1.
+// WARNING: The list may contain duplicates, and they are semantically relevant.
 func (s *openshiftImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }
@@ -393,6 +400,10 @@ func (d *openshiftImageDestination) ReapplyBlob(info types.BlobInfo) (types.Blob
 }
 
 // PutManifest writes manifest to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
@@ -406,6 +417,9 @@ func (d *openshiftImageDestination) PutManifest(m []byte, instanceDigest *digest
 	return d.docker.PutManifest(m, instanceDigest)
 }
 
+// PutSignatures writes signatures to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (d *openshiftImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	var imageStreamImageName string
 

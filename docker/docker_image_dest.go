@@ -211,6 +211,10 @@ func (d *dockerImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 }
 
 // PutManifest writes manifest to the destination.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
@@ -281,6 +285,9 @@ func isManifestInvalidError(err error) bool {
 	return ec.ErrorCode() == v2.ErrorCodeManifestInvalid || ec.ErrorCode() == v2.ErrorCodeTagInvalid
 }
 
+// PutSignatures uploads a set of signatures to the relevant lookaside or API extension point.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to upload the signatures for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (d *dockerImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	// Do not fail if we don’t really need to support signatures.
 	if len(signatures) == 0 {

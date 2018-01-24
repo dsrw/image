@@ -333,6 +333,8 @@ func (d *ostreeImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInf
 }
 
 // PutManifest writes manifest to the destination.
+// The instanceDigest value is expected to always be nil, because this transport does not support manifest lists, so
+// there can be no secondary manifests.
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
@@ -361,6 +363,9 @@ func (d *ostreeImageDestination) PutManifest(manifestBlob []byte, instanceDigest
 	return ioutil.WriteFile(manifestPath, manifestBlob, 0644)
 }
 
+// PutSignatures writes signatures to the destination.
+// The instanceDigest value is expected to always be nil, because this transport does not support manifest lists, so
+// there can be no secondary manifests.
 func (d *ostreeImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	if instanceDigest != nil {
 		return errors.New(`Manifest lists are not supported by "ostree:"`)

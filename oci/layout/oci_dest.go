@@ -195,6 +195,10 @@ func (d *ociImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, 
 // PutManifest writes manifest to the destination.  Per our list of supported manifest MIME types,
 // this should be either an OCI manifest (possibly converted to this format by the caller) or index,
 // neither of which we'll need to modify further.
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
+// the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
+// It is expected but not enforced that the instanceDigest, when specified, matches the digest of `manifest` as generated
+// by `manifest.Digest()`.
 // FIXME? This should also receive a MIME type if known, to differentiate between schema versions.
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
@@ -320,6 +324,9 @@ func (d *ociImageDestination) addManifest(desc *imgspecv1.Descriptor) {
 	d.index.Manifests = append(d.index.Manifests, *desc)
 }
 
+// PutSignatures would add the given signatures to the oci layout (currently not supported).
+// If instanceDigest is not nil, it contains a digest of the specific manifest instance to write or overwrite the signatures for
+// (when the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
 func (d *ociImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
 	if len(signatures) != 0 {
 		return errors.Errorf("Pushing signatures for OCI images is not supported")

@@ -90,6 +90,8 @@ func (s *ostreeImageSource) getTarSplitData(blob string) ([]byte, error) {
 
 // GetManifest returns the image's manifest along with its MIME type (which may be empty when it can't be determined but the manifest is available).
 // It may use a remote (= slow) service.
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as the primary manifest can not be a list, so there can be non-default instances.
 func (s *ostreeImageSource) GetManifest(instanceDigest *digest.Digest) ([]byte, string, error) {
 	if instanceDigest != nil {
 		return nil, "", errors.New(`Manifest lists are not supported by "ostree:"`)
@@ -313,6 +315,9 @@ func (s *ostreeImageSource) GetBlob(info types.BlobInfo) (io.ReadCloser, int64, 
 	return rc, layerSize, nil
 }
 
+// GetSignatures returns the image's signatures.  It may use a remote (= slow) service.
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as there can be no secondary manifests.
 func (s *ostreeImageSource) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error) {
 	if instanceDigest != nil {
 		return nil, errors.New(`Manifest lists are not supported by "ostree:"`)
@@ -348,7 +353,13 @@ func (s *ostreeImageSource) GetSignatures(ctx context.Context, instanceDigest *d
 	return signatures, nil
 }
 
-// LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
+// LayerInfosForCopy returns either nil (meaning the values in the manifest are fine), or updated values for the layer
+// blobsums that are listed in the image's manifest.  If values are returned, they should be used when using GetBlob()
+// to read the image's layers.
+// This source implementation does not support manifest lists, so the passed-in instanceDigest should always be nil,
+// as the primary manifest can not be a list, so there can be secondary manifests.
+// The Digest field is guaranteed to be provided; Size may be -1.
+// WARNING: The list may contain duplicates, and they are semantically relevant.
 func (s *ostreeImageSource) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
 	return nil
 }
