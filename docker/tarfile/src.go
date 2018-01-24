@@ -364,3 +364,8 @@ func (s *Source) GetSignatures(ctx context.Context, instanceDigest *digest.Diges
 	}
 	return [][]byte{}, nil
 }
+
+// LayerInfosForCopy() returns updated layer info that should be used when reading, in preference to values in the manifest, if specified.
+func (s *Source) LayerInfosForCopy(*digest.Digest) []types.BlobInfo {
+	return nil
+}
