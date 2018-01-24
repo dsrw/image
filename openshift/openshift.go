@@ -224,16 +224,16 @@ func (s *openshiftImageSource) GetBlob(info types.BlobInfo) (io.ReadCloser, int6
 // (when the primary manifest is a manifest list); this never happens if the primary manifest is not a manifest list
 // (e.g. if the source never returns manifest lists).
 func (s *openshiftImageSource) GetSignatures(ctx context.Context, instanceDigest *digest.Digest) ([][]byte, error) {
-	var imageName string
+	var imageStreamImageName string
 	if instanceDigest == nil {
 		if err := s.ensureImageIsResolved(ctx); err != nil {
 			return nil, err
 		}
-		imageName = s.imageStreamImageName
+		imageStreamImageName = s.imageStreamImageName
 	} else {
-		imageName = instanceDigest.String()
+		imageStreamImageName = instanceDigest.String()
 	}
-	image, err := s.client.getImage(ctx, imageName)
+	image, err := s.client.getImage(ctx, imageStreamImageName)
 	if err != nil {
 		return nil, err
 	}
@@ -407,6 +407,8 @@ func (d *openshiftImageDestination) PutManifest(m []byte, instanceDigest *digest
 }
 
 func (d *openshiftImageDestination) PutSignatures(signatures [][]byte, instanceDigest *digest.Digest) error {
+	var imageStreamImageName string
+
 	if d.imageStreamImageName == "" {
 		return errors.Errorf("Internal error: Unknown manifest digest, can't add signatures")
 	}
@@ -417,7 +419,13 @@ func (d *openshiftImageDestination) PutSignatures(signatures [][]byte, instanceD
 		return nil // No need to even read the old state.
 	}
 
-	image, err := d.client.getImage(context.TODO(), d.imageStreamImageName)
+	if instanceDigest == nil {
+		imageStreamImageName = d.imageStreamImageName
+	} else {
+		imageStreamImageName = instanceDigest.String()
+	}
+
+	image, err := d.client.getImage(context.TODO(), imageStreamImageName)
 	if err != nil {
 		return err
 	}
@@ -442,7 +450,7 @@ sigExists:
 			if err != nil || n != 16 {
 				return errors.Wrapf(err, "Error generating random signature len %d", n)
 			}
-			signatureName = fmt.Sprintf("%s@%032x", d.imageStreamImageName, randBytes)
+			signatureName = fmt.Sprintf("%s@%032x", imageStreamImageName, randBytes)
 			if _, ok := existingSigNames[signatureName]; !ok {
 				break
 			}
