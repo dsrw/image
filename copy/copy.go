@@ -275,7 +275,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 
 	// Copy each image, in turn.
 	instanceBlobs := list.Instances()
-	updates := make([]manifest.ManifestListUpdate, 0, len(instanceBlobs))
+	updates := make([]manifest.ManifestListUpdate, len(instanceBlobs))
 	for i, instance := range instanceBlobs {
 		logrus.Debugf("Copying instance %s (%d/%d)", instance.Digest, i+1, len(instanceBlobs))
 		unparsedInstance := image.UnparsedInstance(c.rawSource, &instance.Digest)
@@ -289,7 +289,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 			Size:      int64(len(updatedManifest)),
 			MediaType: updatedManifestType,
 		}
-		updates = append(updates, update)
+		updates[i] = update
 	}
 
 	// Now apply the updates.
