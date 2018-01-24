@@ -180,10 +180,7 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 		}
 	} else {
 		// If we were asked to copy multiple images and can't, that's an error.
-		if options.MultipleImages == CopyAllImages && !supportsMultipleImages(c.dest) {
-			return errors.Errorf("Error copying multiple images: destination reference %q does not support multiple images", transports.ImageName(destRef))
-		}
-		if !supportsMultipleImages(c.dest) || options.MultipleImages == CopyOnlyCurrentRuntimeImage {
+		if options.MultipleImages == CopyOnlyCurrentRuntimeImage {
 			// This is a manifest list, and we weren't asked to copy multiple images. Choose a single image and copy it.
 			instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
 			if err != nil {
@@ -195,7 +192,10 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 			if _, _, err := c.copyOneImage(policyContext, options, unparsedInstance, &instanceDigest, nil); err != nil {
 				return err
 			}
-		} else {
+		} else { /* options.MultipleImages == CopyAllImages */
+			if !supportsMultipleImages(c.dest) {
+				return errors.Errorf("Error copying multiple images: destination reference %q does not support multiple images", transports.ImageName(destRef))
+			}
 			// Copy all of the images.
 			logrus.Debugf("Source is a manifest list; copying all instances")
 			if err := c.copyMultipleImages(policyContext, options, unparsedToplevel); err != nil {
