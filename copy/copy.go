@@ -249,10 +249,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 	if err != nil {
 		return errors.Wrapf(err, "Error parsing manifest list %q", string(manifestList))
 	}
-	originalManifestList, err := list.Serialize()
-	if err != nil {
-		return errors.Wrapf(err, "Error re-encoding manifest list %q", string(manifestList))
-	}
+	originalList := list.Clone()
 
 	// Read and/or clear the set of signatures for this list.
 	var sigs [][]byte
@@ -297,11 +294,10 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 		return errors.Wrapf(err, "Error updating manifest list")
 	}
 
-	// Encode the list again.  If the result is the same as it was before we applied the
-	// updates, then the list wasn't changed, and we can just use the original encoded value.
-	updatedManifestList, err := list.Serialize()
-	if err != nil {
-		return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
+	// Check if the updates meaningfully changed the list of images.
+	listIsModified := false
+	if !reflect.DeepEqual(list.Instances(), originalList.Instances()) {
+		listIsModified = true
 	}
 
 	// Determine if we need to convert the manifest to a different format.
@@ -323,24 +319,17 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 			}
 		}
 		if selectedType != list.MIMEType() {
+			listIsModified = true
 			switch selectedType {
 			case manifest.DockerV2ListMediaType:
 				list, err = list.ToSchema2List()
 				if err != nil {
 					return errors.Wrapf(err, "Error converting manifest list to a schema 2 list")
 				}
-				updatedManifestList, err = list.Serialize()
-				if err != nil {
-					return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
-				}
 			case imgspecv1.MediaTypeImageIndex:
 				list, err = list.ToOCI1Index()
 				if err != nil {
 					return errors.Wrapf(err, "Error converting manifest list to an oci 1 index")
-				}
-				updatedManifestList, err = list.Serialize()
-				if err != nil {
-					return errors.Wrapf(err, "Error encoding updated manifest list %q", string(manifestList))
 				}
 			case "":
 				return errors.Errorf("Destination does not support manifest list types")
@@ -350,13 +339,16 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 		}
 	}
 
-	// If we can't use the original value, flag an error.
-	if !bytes.Equal(updatedManifestList, originalManifestList) {
+	// If we can't use the original value, but we have to change it, flag an error.
+	if listIsModified {
 		canModifyManifest := (len(sigs) == 0)
 		if !canModifyManifest {
 			return errors.Errorf("Internal error: copyMultipleImages() needs to use an updated manifest but that was known to be forbidden")
 		}
-		manifestList = updatedManifestList
+		manifestList, err = list.Serialize()
+		if err != nil {
+			return errors.Wrapf(err, "Error encoding updated manifest list (%q: %#v)", list.MIMEType(), list.Instances())
+		}
 		logrus.Debugf("Manifest list has been updated")
 	}
 

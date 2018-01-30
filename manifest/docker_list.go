@@ -189,3 +189,8 @@ func Schema2ListFromManifest(manifest []byte) (*Schema2List, error) {
 	}
 	return &list, nil
 }
+
+// Clone() returns a deep copy of this list and its contents.
+func (list *Schema2List) Clone() ManifestList {
+	return Schema2ListClone(list)
+}

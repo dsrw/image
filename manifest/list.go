@@ -43,6 +43,9 @@ type ManifestList interface {
 
 	// ToSchema2List() returns the list rebuilt as a Schema2 list, converting it if necessary.
 	ToSchema2List() (*Schema2List, error)
+
+	// Clone() returns a deep copy of this list and its contents.
+	Clone() ManifestList
 }
 
 // ManifestListUpdate includes the fields which a manifest's UpdateInstances() method will modify.

@@ -192,3 +192,8 @@ func OCI1IndexFromManifest(manifest []byte) (*OCI1Index, error) {
 	}
 	return &index, nil
 }
+
+// Clone() returns a deep copy of this list and its contents.
+func (index *OCI1Index) Clone() ManifestList {
+	return OCI1IndexClone(index)
+}
