@@ -423,7 +423,7 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 		sigs = [][]byte{}
 	} else {
 		c.Printf("Getting image source signatures\n")
-		s, err := c.rawSource.GetSignatures(context.TODO(), sourceInstance)
+		s, err := src.Signatures(context.TODO())
 		if err != nil {
 			return nil, "", errors.Wrap(err, "Error reading signatures")
 		}
