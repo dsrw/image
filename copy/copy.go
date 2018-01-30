@@ -181,18 +181,9 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 	} else {
 		// If we were asked to copy multiple images and can't, that's an error.
 		if options.MultipleImages == CopyOnlyCurrentRuntimeImage {
-			// Parse the manifest list.
-			man, manifestType, err := rawSource.GetManifest(nil)
-			if err != nil {
-				return err
-			}
-			list, err := manifest.ListFromBlob(man, manifestType)
-			if err != nil {
-				return err
-			}
 			// This is a manifest list, and we weren't asked to copy multiple images.  Choose a single image to copy,
 			// and copy it.
-			instanceDigest, err := list.ChooseDigest(options.SourceCtx)
+			instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
 			if err != nil {
 				return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(srcRef))
 			}

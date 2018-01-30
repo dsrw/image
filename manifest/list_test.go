@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/containers/image/types"
+	digest "github.com/opencontainers/go-digest"
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,5 +91,63 @@ func TestParseLists(t *testing.T) {
 
 		list2, err := index.ToSchema2List()
 		assert.Equal(t, list, list2, "list %q lost data in conversion", c.path)
+	}
+}
+
+func TestChooseDigest(t *testing.T) {
+	for _, manifestList := range []struct {
+		listFile           string
+		rawManifest        []byte
+		matchedInstances   map[string]digest.Digest
+		unmatchedInstances []string
+	}{
+		{
+			listFile: "schema2list.json",
+			matchedInstances: map[string]digest.Digest{
+				"amd64": "sha256:030fcb92e1487b18c974784dcc110a93147c9fc402188370fbfd17efabffc6af",
+				"s390x": "sha256:e5aa1b0a24620228b75382997a0977f609b3ca3a95533dafdef84c74cc8df642",
+				// There are several "arm" images with different variants;
+				// the current code returns the first match. NOTE: This is NOT an API promise.
+				"arm": "sha256:9142d97ef280a7953cf1a85716de49a24cc1dd62776352afad67e635331ff77a",
+			},
+			unmatchedInstances: []string{
+				"unmatched",
+			},
+		},
+		{
+			listFile: "oci1index.json",
+			matchedInstances: map[string]digest.Digest{
+				"amd64":   "sha256:5b0bcabd1ed22e9fb1310cf6c2dec7cdef19f0ad69efa1f392e94a4333501270",
+				"ppc64le": "sha256:e692418e4cbaf90ca69d05a66403747baa33ee08806650b51fab815ad7fc331f",
+			},
+			unmatchedInstances: []string{
+				"unmatched",
+			},
+		},
+	} {
+		if len(manifestList.listFile) > 0 {
+			man, err := ioutil.ReadFile(filepath.Join("..", "image", "fixtures", manifestList.listFile))
+			require.NoError(t, err)
+			manifestList.rawManifest = man
+		}
+		list, err := ListFromBlob(manifestList.rawManifest, GuessMIMEType(manifestList.rawManifest))
+		require.NoError(t, err)
+		// Match found
+		for arch, expected := range manifestList.matchedInstances {
+			digest, err := list.ChooseDigest(&types.SystemContext{
+				ArchitectureChoice: arch,
+				OSChoice:           "linux",
+			})
+			require.NoError(t, err, arch)
+			assert.Equal(t, expected, digest)
+		}
+		// Not found
+		for _, arch := range manifestList.unmatchedInstances {
+			_, err := list.ChooseDigest(&types.SystemContext{
+				ArchitectureChoice: arch,
+				OSChoice:           "linux",
+			})
+			assert.Error(t, err)
+		}
 	}
 }
