@@ -312,8 +312,12 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 			return err
 		}
 		// Record the result of a possible conversion here.
+		md, err := manifest.Digest(updatedManifest)
+		if err != nil {
+			return err
+		}
 		update := manifest.ManifestListUpdate{
-			Digest:    digest.FromBytes(updatedManifest),
+			Digest:    md,
 			Size:      int64(len(updatedManifest)),
 			MediaType: updatedManifestType,
 		}
@@ -655,7 +659,7 @@ func (ic *imageCopier) copyUpdatedConfigAndManifest(instanceDigest *digest.Diges
 		}
 		pendingImage = pi
 	}
-	manifest, _, err := pendingImage.Manifest()
+	man, _, err := pendingImage.Manifest()
 	if err != nil {
 		return nil, errors.Wrap(err, "Error reading manifest")
 	}
@@ -666,13 +670,16 @@ func (ic *imageCopier) copyUpdatedConfigAndManifest(instanceDigest *digest.Diges
 
 	ic.c.Printf("Writing manifest to image destination\n")
 	if instanceDigest != nil {
-		tmpDigest := digest.FromBytes(manifest)
+		tmpDigest, err := manifest.Digest(man)
+		if err != nil {
+			return nil, err
+		}
 		instanceDigest = &tmpDigest
 	}
-	if err := ic.c.dest.PutManifest(manifest, instanceDigest); err != nil {
+	if err := ic.c.dest.PutManifest(man, instanceDigest); err != nil {
 		return nil, errors.Wrap(err, "Error writing manifest")
 	}
-	return manifest, nil
+	return man, nil
 }
 
 // copyConfig copies config.json, if any, from src to dest.
