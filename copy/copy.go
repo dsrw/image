@@ -389,8 +389,8 @@ func (c *copier) copyOneImage(policyContext *signature.PolicyContext, options *O
 	}
 
 	// Please keep this policy check BEFORE reading any other information about the image.
-	// (the multiImage check above only matches the MIME type, which we have received anyway.
-	// Actual parsing of anything should be deferred.
+	// (The multiImage check above only matches the MIME type, which we have received anyway.
+	// Actual parsing of anything should be deferred.)
 	if allowed, err := policyContext.IsRunningImageAllowed(unparsedImage); !allowed || err != nil { // Be paranoid and fail if either return value indicates so.
 		return nil, "", errors.Wrap(err, "Source image rejected")
 	}
