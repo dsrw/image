@@ -10,6 +10,15 @@ import (
 	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+var (
+	// SupportedManifestListMIMETypes is a list of the manifest list types that we know how
+	// to read/manipulate/write.
+	SupportedManifestListMIMETypes = []string{
+		DockerV2ListMediaType,
+		imgspecv1.MediaTypeImageIndex,
+	}
+)
+
 // ManifestList is an interface for parsing, modifying lists of image manifests.
 // Callers can either use this abstract interface without understanding the details of the formats,
 // or instantiate a specific implementation (e.g. manifest.OCI1Index) and access the public members
