@@ -80,8 +80,8 @@ func dupStringSlice(list []string) []string {
 	return dup
 }
 
-// dupStringStringMape returns a deep copy of a map[string]string, always returning
-// an initialized map, even if there are no contents to copy into it.
+// dupStringStringMap returns a deep copy of a map[string]string, or nil if the
+// passed-in map is empty or has no contents.
 func dupStringStringMap(m map[string]string) map[string]string {
 	if len(m) == 0 {
 		return nil
