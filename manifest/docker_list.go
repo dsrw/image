@@ -192,3 +192,9 @@ func Schema2ListFromManifest(manifest []byte) (*Schema2List, error) {
 func (list *Schema2List) Clone() ManifestList {
 	return Schema2ListClone(list)
 }
+
+// ConvertToMIMEType converts the passed-in manifest list to a manifest
+// list of the specified type.
+func (list *Schema2List) ConvertToMIMEType(manifestMIMEType string) (ManifestList, error) {
+	return ConvertManifestListToMIMEType(list, manifestMIMEType)
+}

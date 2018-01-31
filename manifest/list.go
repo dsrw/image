@@ -53,6 +53,9 @@ type ManifestList interface {
 	// ToSchema2List() returns the list rebuilt as a Schema2 list, converting it if necessary.
 	ToSchema2List() (*Schema2List, error)
 
+	// ConvertToMIMEType returns the list rebuilt to the specified MIME type, or an error.
+	ConvertToMIMEType(mimeType string) (ManifestList, error)
+
 	// Clone() returns a deep copy of this list and its contents.
 	Clone() ManifestList
 }
@@ -128,4 +131,18 @@ func computeListID(manifests ManifestList) string {
 	}
 	sort.Slice(digests, func(i, j int) bool { return bytes.Compare(digests[i], digests[j]) < 0 })
 	return digest.FromBytes(bytes.Join(digests, []byte{0})).Hex()
+}
+
+// ConvertManifestListToMIMEType converts the passed-in manifest list to a manifest
+// list of the specified type.
+func ConvertManifestListToMIMEType(list ManifestList, manifestMIMEType string) (ManifestList, error) {
+	switch normalized := NormalizedMIMEType(manifestMIMEType); normalized {
+	case DockerV2ListMediaType:
+		return list.ToSchema2List()
+	case imgspecv1.MediaTypeImageIndex:
+		return list.ToOCI1Index()
+	case DockerV2Schema1MediaType, DockerV2Schema1SignedMediaType, imgspecv1.MediaTypeImageManifest, DockerV2Schema2MediaType:
+		return nil, fmt.Errorf("Can not convert manifest list to MIME type %q, which is not a list type", manifestMIMEType)
+	}
+	return nil, fmt.Errorf("Unimplemented manifest MIME type %s", manifestMIMEType)
 }

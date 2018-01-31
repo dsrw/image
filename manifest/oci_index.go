@@ -197,3 +197,9 @@ func OCI1IndexFromManifest(manifest []byte) (*OCI1Index, error) {
 func (index *OCI1Index) Clone() ManifestList {
 	return OCI1IndexClone(index)
 }
+
+// ConvertToMIMEType converts the passed-in image index to a manifest list of
+// the specified type.
+func (index *OCI1Index) ConvertToMIMEType(manifestMIMEType string) (ManifestList, error) {
+	return ConvertManifestListToMIMEType(index, manifestMIMEType)
+}
