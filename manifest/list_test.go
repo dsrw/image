@@ -56,13 +56,11 @@ func pare(m ManifestList) {
 
 func TestParseLists(t *testing.T) {
 	cases := []struct {
-		path      string
-		mimeType  string
-		checkType (func(interface{}) bool)
-		clone     (func(interface{}) ManifestList)
+		path     string
+		mimeType string
 	}{
-		{"ociv1.image.index.json", imgspecv1.MediaTypeImageIndex, isOCI1Index, cloneOCI1Index},
-		{"v2list.manifest.json", DockerV2ListMediaType, isSchema2List, cloneSchema2List},
+		{"ociv1.image.index.json", imgspecv1.MediaTypeImageIndex},
+		{"v2list.manifest.json", DockerV2ListMediaType},
 	}
 	for _, c := range cases {
 		manifest, err := ioutil.ReadFile(filepath.Join("fixtures", c.path))
@@ -74,10 +72,10 @@ func TestParseLists(t *testing.T) {
 
 		m, err := ListFromBlob(manifest, c.mimeType)
 		require.NoError(t, err, "manifest list %q  should parse as list types", c.path)
-		assert.True(t, c.checkType(m), "manifest %q is not of the expected implementation type", c.path)
+		assert.Equal(t, m.MIMEType(), c.mimeType, "manifest %q is not of the expected MIME type", c.path)
 		pare(m)
 
-		clone := c.clone(m)
+		clone := m.Clone()
 		assert.Equal(t, clone, m, "manifest %q is missing some fields after being cloned", c.path)
 
 		index, err := m.ToOCI1Index()
