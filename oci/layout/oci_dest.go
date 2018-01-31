@@ -203,12 +203,15 @@ func (d *ociImageDestination) ReapplyBlob(info types.BlobInfo) (types.BlobInfo, 
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (d *ociImageDestination) PutManifest(m []byte, instanceDigest *digest.Digest) error {
-	digest, err := manifest.Digest(m)
-	if err != nil {
-		return err
-	}
+	var digest digest.Digest
+	var err error
 	if instanceDigest != nil {
 		digest = *instanceDigest
+	} else {
+		digest, err = manifest.Digest(m)
+		if err != nil {
+			return err
+		}
 	}
 
 	blobPath, err := d.ref.blobPath(digest, d.sharedBlobDir)
@@ -231,7 +234,7 @@ func (d *ociImageDestination) PutManifest(m []byte, instanceDigest *digest.Diges
 	desc.Digest = digest
 	desc.Size = int64(len(m))
 
-	// Only a "main" manifest gets the image name attached to it.
+	// Only a primary manifest gets the image name attached to it.
 	annotations := make(map[string]string)
 	if instanceDigest == nil {
 		annotations[imgspecv1.AnnotationRefName] = d.ref.image
