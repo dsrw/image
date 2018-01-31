@@ -215,7 +215,8 @@ func NormalizedMIMEType(input string) string {
 
 // FromBlob returns a Manifest instance for the specified manifest blob and the corresponding MIME type
 func FromBlob(manblob []byte, mt string) (Manifest, error) {
-	switch nmt := NormalizedMIMEType(mt); nmt {
+	nmt := NormalizedMIMEType(mt)
+	switch nmt {
 	case DockerV2Schema1MediaType, DockerV2Schema1SignedMediaType:
 		return Schema1FromManifest(manblob)
 	case imgspecv1.MediaTypeImageManifest:
@@ -226,10 +227,8 @@ func FromBlob(manblob []byte, mt string) (Manifest, error) {
 		return nil, fmt.Errorf("Treating manifest lists as individual manifests is not implemented")
 	case imgspecv1.MediaTypeImageIndex:
 		return nil, fmt.Errorf("Treating image indices as individual manifests is not implemented")
-	default: // Note that this may not be reachable, NormalizedMIMEType has a default for unknown values.
-		return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", mt, nmt)
 	}
-	return nil, fmt.Errorf("Unimplemented manifest MIME type %s", mt)
+	return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", mt, nmt)
 }
 
 // LayerInfosToStrings converts a list of layer infos, presumably obtained from a Manifest.LayerInfos()
