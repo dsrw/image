@@ -94,7 +94,7 @@ func TestParseLists(t *testing.T) {
 	}
 }
 
-func TestChooseDigest(t *testing.T) {
+func TestChooseInstance(t *testing.T) {
 	for _, manifestList := range []struct {
 		listFile           string
 		rawManifest        []byte
@@ -134,7 +134,7 @@ func TestChooseDigest(t *testing.T) {
 		require.NoError(t, err)
 		// Match found
 		for arch, expected := range manifestList.matchedInstances {
-			digest, err := list.ChooseDigest(&types.SystemContext{
+			digest, err := list.ChooseInstance(&types.SystemContext{
 				ArchitectureChoice: arch,
 				OSChoice:           "linux",
 			})
@@ -143,7 +143,7 @@ func TestChooseDigest(t *testing.T) {
 		}
 		// Not found
 		for _, arch := range manifestList.unmatchedInstances {
-			_, err := list.ChooseDigest(&types.SystemContext{
+			_, err := list.ChooseInstance(&types.SystemContext{
 				ArchitectureChoice: arch,
 				OSChoice:           "linux",
 			})

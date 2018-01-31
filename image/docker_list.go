@@ -12,7 +12,7 @@ func manifestSchema2FromManifestList(ctx *types.SystemContext, src types.ImageSo
 	if err != nil {
 		return nil, err
 	}
-	targetManifestDigest, err := list.ChooseDigest(ctx)
+	targetManifestDigest, err := list.ChooseInstance(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,5 +43,5 @@ func ChooseManifestInstanceFromManifestList(ctx *types.SystemContext, src types.
 	if err != nil {
 		return "", err
 	}
-	return list.ChooseDigest(ctx)
+	return list.ChooseInstance(ctx)
 }

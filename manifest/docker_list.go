@@ -78,9 +78,9 @@ func (list *Schema2List) UpdateInstances(updates []ManifestListUpdate) error {
 	return nil
 }
 
-// ChooseDigest parses blob as a schema2 manifest list, and returns the digest
+// ChooseInstance parses blob as a schema2 manifest list, and returns the digest
 // of the image which is appropriate for the current environment.
-func (list *Schema2List) ChooseDigest(ctx *types.SystemContext) (digest.Digest, error) {
+func (list *Schema2List) ChooseInstance(ctx *types.SystemContext) (digest.Digest, error) {
 	wantedArch := runtime.GOARCH
 	if ctx != nil && ctx.ArchitectureChoice != "" {
 		wantedArch = ctx.ArchitectureChoice

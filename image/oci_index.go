@@ -11,7 +11,7 @@ func manifestOCI1FromImageIndex(ctx *types.SystemContext, src types.ImageSource,
 	if err != nil {
 		return nil, errors.Wrapf(err, "Error parsing OCI1 index")
 	}
-	targetManifestDigest, err := index.ChooseDigest(ctx)
+	targetManifestDigest, err := index.ChooseInstance(ctx)
 	if err != nil {
 		return nil, err
 	}

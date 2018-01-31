@@ -35,9 +35,9 @@ type ManifestList interface {
 	// must be specified.
 	UpdateInstances([]ManifestListUpdate) error
 
-	// ChooseDigest selects which manifest is most appropriate for the platform described by the
+	// ChooseInstance selects which manifest is most appropriate for the platform described by the
 	// SystemContext, or for the current platform if the SystemContext doesn't specify any details.
-	ChooseDigest(ctx *types.SystemContext) (digest.Digest, error)
+	ChooseInstance(ctx *types.SystemContext) (digest.Digest, error)
 
 	// ImageID computes a recommended image ID based on the list of images referred to by the manifest.
 	ImageID() string
@@ -116,7 +116,7 @@ func ChooseManifestInstanceFromManifestList(ctx *types.SystemContext, manifests 
 	if mt != DockerV2ListMediaType && mt != imgspecv1.MediaTypeImageIndex {
 		return "", fmt.Errorf("Internal error: Trying to select an image from a non-manifest-list manifest type %s", mt)
 	}
-	return manifests.ChooseDigest(ctx)
+	return manifests.ChooseInstance(ctx)
 }
 
 // computeListID computes an image ID using the list of images referred to in a ManifestList.
