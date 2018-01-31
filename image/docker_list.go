@@ -3,7 +3,6 @@ package image
 import (
 	"github.com/containers/image/manifest"
 	"github.com/containers/image/types"
-	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -30,18 +29,4 @@ func manifestSchema2FromManifestList(ctx *types.SystemContext, src types.ImageSo
 	}
 
 	return manifestInstanceFromBlob(ctx, src, manblob, mt)
-}
-
-// ChooseManifestInstanceFromManifestList returns a digest of a manifest appropriate
-// for the current system from the manifest available from src.
-func ChooseManifestInstanceFromManifestList(ctx *types.SystemContext, src types.UnparsedImage) (digest.Digest, error) {
-	blob, mt, err := src.Manifest()
-	if err != nil {
-		return "", err
-	}
-	list, err := manifest.ListFromBlob(blob, mt)
-	if err != nil {
-		return "", err
-	}
-	return list.ChooseInstance(ctx)
 }

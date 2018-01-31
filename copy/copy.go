@@ -168,6 +168,10 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 	}
 
 	unparsedToplevel := image.UnparsedInstance(rawSource, nil)
+	mfest, manifestType, err := unparsedToplevel.Manifest()
+	if err != nil {
+		return errors.Wrapf(err, "Error reading manifest for %s", transports.ImageName(srcRef))
+	}
 	multiImage, err := isMultiImage(unparsedToplevel)
 	if err != nil {
 		return errors.Wrapf(err, "Error determining manifest MIME type for %s", transports.ImageName(srcRef))
@@ -183,7 +187,11 @@ func Image(policyContext *signature.PolicyContext, destRef, srcRef types.ImageRe
 		if options.MultipleImages == CopyOnlyCurrentRuntimeImage {
 			// This is a manifest list, and we weren't asked to copy multiple images.  Choose a single image to copy,
 			// and copy it.
-			instanceDigest, err := image.ChooseManifestInstanceFromManifestList(options.SourceCtx, unparsedToplevel)
+			manifestList, err := manifest.ListFromBlob(mfest, manifestType)
+			if err != nil {
+				return errors.Wrapf(err, "Error parsing primary manifest as list for %s", transports.ImageName(srcRef))
+			}
+			instanceDigest, err := manifestList.ChooseInstance(options.SourceCtx)
 			if err != nil {
 				return errors.Wrapf(err, "Error choosing an image from manifest list %s", transports.ImageName(srcRef))
 			}

@@ -107,16 +107,6 @@ func ListFromBlob(manifest []byte, manifestMIMEType string) (ManifestList, error
 	return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", manifestMIMEType, normalized)
 }
 
-// ChooseManifestInstanceFromManifestList returns a digest of a manifest appropriate
-// for the current system from the manifest available from src.
-func ChooseManifestInstanceFromManifestList(ctx *types.SystemContext, manifests ManifestList) (digest.Digest, error) {
-	mt := manifests.MIMEType()
-	if mt != DockerV2ListMediaType && mt != imgspecv1.MediaTypeImageIndex {
-		return "", fmt.Errorf("Internal error: Trying to select an image from a non-manifest-list manifest type %s", mt)
-	}
-	return manifests.ChooseInstance(ctx)
-}
-
 // computeListID computes an image ID using the list of images referred to in a ManifestList.
 func computeListID(manifests ManifestList) string {
 	instances := manifests.Instances()
