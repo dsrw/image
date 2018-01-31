@@ -95,21 +95,16 @@ func dupStringStringMap(m map[string]string) map[string]string {
 
 // ListFromBlob parses a list of manifests.
 func ListFromBlob(manifest []byte, manifestMIMEType string) (ManifestList, error) {
-	switch normalized := NormalizedMIMEType(manifestMIMEType); normalized {
+	normalized := NormalizedMIMEType(manifestMIMEType)
+	switch normalized {
 	case DockerV2ListMediaType:
 		return Schema2ListFromManifest(manifest)
 	case imgspecv1.MediaTypeImageIndex:
 		return OCI1IndexFromManifest(manifest)
-	case DockerV2Schema1MediaType, DockerV2Schema1SignedMediaType:
+	case DockerV2Schema1MediaType, DockerV2Schema1SignedMediaType, imgspecv1.MediaTypeImageManifest, DockerV2Schema2MediaType:
 		return nil, fmt.Errorf("Treating single images as manifest lists is not implemented")
-	case imgspecv1.MediaTypeImageManifest:
-		return nil, fmt.Errorf("Treating single images as manifest lists is not implemented")
-	case DockerV2Schema2MediaType:
-		return nil, fmt.Errorf("Treating single images as manifest lists is not implemented")
-	default:
-		return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", manifestMIMEType, normalized)
 	}
-	return nil, fmt.Errorf("Unimplemented manifest MIME type %s", manifestMIMEType)
+	return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", manifestMIMEType, normalized)
 }
 
 // ChooseManifestInstanceFromManifestList returns a digest of a manifest appropriate
