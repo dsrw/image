@@ -140,12 +140,12 @@ func OCI1IndexClone(index *OCI1Index) *OCI1Index {
 	return OCI1IndexFromComponents(index.Manifests, index.Annotations)
 }
 
-// ToOCI1Index() returns the index encoded as an OCI1 index.
+// ToOCI1Index returns the index encoded as an OCI1 index.
 func (index *OCI1Index) ToOCI1Index() (*OCI1Index, error) {
 	return OCI1IndexClone(index), nil
 }
 
-// ToSchema2List() returns the index encoded as a Schema2 list.
+// ToSchema2List returns the index encoded as a Schema2 list.
 func (index *OCI1Index) ToSchema2List() (*Schema2List, error) {
 	components := make([]Schema2ManifestDescriptor, 0, len(index.Manifests))
 	for _, manifest := range index.Manifests {
@@ -193,7 +193,7 @@ func OCI1IndexFromManifest(manifest []byte) (*OCI1Index, error) {
 	return &index, nil
 }
 
-// Clone() returns a deep copy of this list and its contents.
+// Clone returns a deep copy of this list and its contents.
 func (index *OCI1Index) Clone() ManifestList {
 	return OCI1IndexClone(index)
 }

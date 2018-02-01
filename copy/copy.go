@@ -92,13 +92,15 @@ type imageCopier struct {
 }
 
 const (
-	// CopyOnlyCurrentRuntimeImage, when set in Options.MultipleImages, indicates that the
-	// caller expects only one image to be copied, so if the source reference refers to a
-	// list of images, one that matches the current system will be selected.
+	// CopyOnlyCurrentRuntimeImage is a value which, when set in
+	// Options.MultipleImages, indicates that the caller expects only one
+	// image to be copied, so if the source reference refers to a list of
+	// images, one that matches the current system will be selected.
 	CopyOnlyCurrentRuntimeImage = iota
-	// CopyAllImages, when set in Options.MultipleImages, indicates that the caller expects
-	// to copy multiple images, and if the source reference refers to a list of images, but
-	// the target reference can only accept one image, an error should be returned.
+	// CopyAllImages is a value which, when set in Options.MultipleImages,
+	// indicates that the caller expects to copy multiple images, and if the
+	// source reference refers to a list of images, but the target reference
+	// can only accept one image, an error should be returned.
 	CopyAllImages
 )
 

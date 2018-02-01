@@ -47,20 +47,20 @@ type ManifestList interface {
 	// from, even if no modifications were made!
 	Serialize() ([]byte, error)
 
-	// ToOCI1Index() returns the list rebuilt as an OCI1 index, converting it if necessary.
+	// ToOCI1Index returns the list rebuilt as an OCI1 index, converting it if necessary.
 	ToOCI1Index() (*OCI1Index, error)
 
-	// ToSchema2List() returns the list rebuilt as a Schema2 list, converting it if necessary.
+	// ToSchema2List returns the list rebuilt as a Schema2 list, converting it if necessary.
 	ToSchema2List() (*Schema2List, error)
 
 	// ConvertToMIMEType returns the list rebuilt to the specified MIME type, or an error.
 	ConvertToMIMEType(mimeType string) (ManifestList, error)
 
-	// Clone() returns a deep copy of this list and its contents.
+	// Clone returns a deep copy of this list and its contents.
 	Clone() ManifestList
 }
 
-// ManifestListUpdate includes the fields which a manifest's UpdateInstances() method will modify.
+// ManifestListUpdate includes the fields which a ManifestList's UpdateInstances() method will modify.
 type ManifestListUpdate struct {
 	Digest    digest.Digest
 	Size      int64

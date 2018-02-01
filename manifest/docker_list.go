@@ -148,7 +148,7 @@ func Schema2ListClone(list *Schema2List) *Schema2List {
 	return Schema2ListFromComponents(list.Manifests)
 }
 
-// ToOCI1Index() returns the list encoded as an OCI1 index.
+// ToOCI1Index returns the list encoded as an OCI1 index.
 func (list *Schema2List) ToOCI1Index() (*OCI1Index, error) {
 	components := make([]imgspecv1.Descriptor, 0, len(list.Manifests))
 	for _, manifest := range list.Manifests {
@@ -171,7 +171,7 @@ func (list *Schema2List) ToOCI1Index() (*OCI1Index, error) {
 	return oci, nil
 }
 
-// ToSchema2List() returns the list encoded as a Schema2 list.
+// ToSchema2List returns the list encoded as a Schema2 list.
 func (list *Schema2List) ToSchema2List() (*Schema2List, error) {
 	return Schema2ListClone(list), nil
 }
@@ -188,7 +188,7 @@ func Schema2ListFromManifest(manifest []byte) (*Schema2List, error) {
 	return &list, nil
 }
 
-// Clone() returns a deep copy of this list and its contents.
+// Clone returns a deep copy of this list and its contents.
 func (list *Schema2List) Clone() ManifestList {
 	return Schema2ListClone(list)
 }
