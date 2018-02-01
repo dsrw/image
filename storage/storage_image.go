@@ -162,7 +162,7 @@ func (s *storageImageSource) getBlobAndLayerID(info types.BlobInfo) (rc io.ReadC
 	return rc, n, layer.ID, err
 }
 
-func (s *storageImageSource) instanceFor(instanceDigest *digest.Digest) string {
+func instanceFor(instanceDigest *digest.Digest) string {
 	if instanceDigest == nil {
 		return ""
 	}
@@ -201,7 +201,7 @@ func (s *storageImageSource) imageIDFor(instanceDigest *digest.Digest) (string, 
 
 // GetManifest() reads the image's manifest.
 func (s *storageImageSource) GetManifest(instanceDigest *digest.Digest) (manifestBlob []byte, MIMEType string, err error) {
-	instance := s.instanceFor(instanceDigest)
+	instance := instanceFor(instanceDigest)
 	if cached, ok := s.manifestCache[instance]; ok {
 		return cached, s.manifestTypes[instance], err
 	}
@@ -609,7 +609,7 @@ func (s *storageImageDestination) commitName(imageID string, oldNames []string, 
 
 func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) error {
 	// Find the list of non-layer blobs.
-	instance := s.instanceFor(instanceDigest)
+	instance := instanceFor(instanceDigest)
 	m := s.rawManifests[instance]
 	if len(m) == 0 {
 		return errors.New("Internal error: storageImageDestination.Commit() called without PutManifest()")
@@ -670,7 +670,7 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 		return err
 	}
 	// Save the signatures, if we have any.
-	sigblob := s.signatures[s.instanceFor(instanceDigest)]
+	sigblob := s.signatures[instanceFor(instanceDigest)]
 	if len(sigblob) > 0 {
 		if err := s.imageRef.transport.store.SetImageBigData(img.ID, "signatures", sigblob); err != nil {
 			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
@@ -681,7 +681,7 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 		}
 	}
 	// Save our metadata.
-	metadata, err := json.Marshal(storageImageMetadata{SignatureSizes: s.signatureSizes[s.instanceFor(instanceDigest)]})
+	metadata, err := json.Marshal(storageImageMetadata{SignatureSizes: s.signatureSizes[instanceFor(instanceDigest)]})
 	if err != nil {
 		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
@@ -704,11 +704,11 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 
 func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) error {
 	// Find the list of layer blobs.
-	m := s.rawManifests[s.instanceFor(instanceDigest)]
+	m := s.rawManifests[instanceFor(instanceDigest)]
 	if len(m) == 0 {
 		return errors.New("Internal error: storageImageDestination.Commit() called without PutManifest()")
 	}
-	man := s.manifests[s.instanceFor(instanceDigest)]
+	man := s.manifests[instanceFor(instanceDigest)]
 	if len(m) == 0 {
 		return errors.New("Internal error: storageImageDestination.Commit() called without PutManifest()")
 	}
@@ -852,7 +852,7 @@ func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) er
 		return err
 	}
 	// Save the signatures, if we have any.
-	sigblob := s.signatures[s.instanceFor(instanceDigest)]
+	sigblob := s.signatures[instanceFor(instanceDigest)]
 	if len(sigblob) > 0 {
 		if err := s.imageRef.transport.store.SetImageBigData(img.ID, "signatures", sigblob); err != nil {
 			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
@@ -863,7 +863,7 @@ func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) er
 		}
 	}
 	// Save our metadata.
-	metadata, err := json.Marshal(storageImageMetadata{SignatureSizes: s.signatureSizes[s.instanceFor(instanceDigest)]})
+	metadata, err := json.Marshal(storageImageMetadata{SignatureSizes: s.signatureSizes[instanceFor(instanceDigest)]})
 	if err != nil {
 		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
@@ -885,7 +885,7 @@ func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) er
 }
 
 func (s *storageImageDestination) commitSingleOrGroup(instanceDigest *digest.Digest) error {
-	if manifest.MIMETypeIsMultiImage(s.manifestTypes[s.instanceFor(instanceDigest)]) {
+	if manifest.MIMETypeIsMultiImage(s.manifestTypes[instanceFor(instanceDigest)]) {
 		return s.commitGroup(instanceDigest)
 	}
 	return s.commitSingle(instanceDigest)
@@ -924,13 +924,6 @@ func (s *storageImageDestination) SupportedManifestMIMETypes() []string {
 	return manifestMIMETypes
 }
 
-func (s *storageImageDestination) instanceFor(instanceDigest *digest.Digest) string {
-	if instanceDigest == nil {
-		return ""
-	}
-	return instanceDigest.String()
-}
-
 // PutManifest writes the manifest to the destination.
 // If instanceDigest is not nil, it contains a digest of the specific manifest instance to overwrite the manifest for (when
 // the primary manifest is a manifest list); this should always be nil if the primary manifest is not a manifest list.
@@ -940,7 +933,7 @@ func (s *storageImageDestination) instanceFor(instanceDigest *digest.Digest) str
 // If the destination is in principle available, refuses this manifest type (e.g. it does not recognize the schema),
 // but may accept a different manifest type, the returned error must be an ManifestTypeRejectedError.
 func (s *storageImageDestination) PutManifest(manifestBytes []byte, instanceDigest *digest.Digest) error {
-	instance := s.instanceFor(instanceDigest)
+	instance := instanceFor(instanceDigest)
 	m := make([]byte, len(manifestBytes))
 	copy(m, manifestBytes)
 	s.rawManifests[instance] = m
@@ -989,8 +982,8 @@ func (s *storageImageDestination) PutSignatures(signatures [][]byte, instanceDig
 		copy(newblob[len(sigblob):], sig)
 		sigblob = newblob
 	}
-	s.signatures[s.instanceFor(instanceDigest)] = sigblob
-	s.signatureSizes[s.instanceFor(instanceDigest)] = sizes
+	s.signatures[instanceFor(instanceDigest)] = sigblob
+	s.signatureSizes[instanceFor(instanceDigest)] = sizes
 	return nil
 }
 
