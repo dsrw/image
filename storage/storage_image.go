@@ -625,8 +625,12 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 	if intendedID == "" {
 		intendedID = man.ImageID()
 	}
+	return s.commitImageRecord(instanceDigest, m, intendedID, "", options)
+}
+
+func (s *storageImageDestination) commitImageRecord(instanceDigest *digest.Digest, manifest []byte, intendedID string, layer string, options *storage.ImageOptions) error {
 	oldNames := []string{}
-	img, err := s.imageRef.transport.store.CreateImage(intendedID, nil, "", "", options)
+	img, err := s.imageRef.transport.store.CreateImage(intendedID, nil, layer, "", options)
 	if err != nil {
 		if errors.Cause(err) != storage.ErrDuplicateID {
 			logrus.Debugf("error creating image: %q", err)
@@ -636,9 +640,13 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 		if err != nil {
 			return errors.Wrapf(err, "error reading image %q", intendedID)
 		}
-		if img.TopLayer != "" {
-			logrus.Debugf("error creating image: image with ID %q exists, but uses layers", intendedID)
-			return errors.Wrapf(storage.ErrDuplicateID, "image with ID %q already exists, but uses layers", intendedID)
+		if img.TopLayer != layer {
+			why := "uses layers"
+			if layer != "" {
+				why = "uses a different top layer"
+			}
+			logrus.Debugf("error creating image: image with ID %q exists, but %s", intendedID, why)
+			return errors.Wrapf(storage.ErrDuplicateID, "image with ID %q already exists, but %s", intendedID, why)
 		}
 		logrus.Debugf("reusing image ID %q", img.ID)
 		oldNames = append(oldNames, img.Names...)
@@ -662,7 +670,7 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 	}
 	// Save the manifest.  Use storage.ImageDigestBigDataKey as the item's
 	// name, so that its digest can be used to locate the image in the Store.
-	if err := s.imageRef.transport.store.SetImageBigData(img.ID, storage.ImageDigestBigDataKey, m); err != nil {
+	if err := s.imageRef.transport.store.SetImageBigData(img.ID, storage.ImageDigestBigDataKey, manifest); err != nil {
 		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
 		}
@@ -813,81 +821,7 @@ func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) er
 	if intendedID == "" {
 		intendedID = s.computeID(man)
 	}
-	oldNames := []string{}
-	img, err := s.imageRef.transport.store.CreateImage(intendedID, nil, lastLayer, "", options)
-	if err != nil {
-		if errors.Cause(err) != storage.ErrDuplicateID {
-			logrus.Debugf("error creating image: %q", err)
-			return errors.Wrapf(err, "error creating image %q", intendedID)
-		}
-		img, err = s.imageRef.transport.store.Image(intendedID)
-		if err != nil {
-			return errors.Wrapf(err, "error reading image %q", intendedID)
-		}
-		if img.TopLayer != lastLayer {
-			logrus.Debugf("error creating image: image with ID %q exists, but uses different layers", intendedID)
-			return errors.Wrapf(storage.ErrDuplicateID, "image with ID %q already exists, but uses a different top layer", intendedID)
-		}
-		logrus.Debugf("reusing image ID %q", img.ID)
-		oldNames = append(oldNames, img.Names...)
-	} else {
-		logrus.Debugf("created new image ID %q", img.ID)
-	}
-	// Add the non-layer blobs as data items.  Since we only share layers, they should all be in files, so
-	// we just need to screen out the ones that are actually layers to get the list of non-layers.
-	if err = s.commitDataBlobs(img.ID); err != nil {
-		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-		}
-		return errors.Wrapf(err, "error saving non-layer blobs to image %q", img.ID)
-	}
-	// Set the reference's name on the image.
-	if err = s.commitName(img.ID, oldNames, instanceDigest); err != nil {
-		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-		}
-		return errors.Wrapf(err, "error setting name on image %q", img.ID)
-	}
-	// Save the manifest.  Use storage.ImageDigestBigDataKey as the item's
-	// name, so that its digest can be used to locate the image in the Store.
-	if err := s.imageRef.transport.store.SetImageBigData(img.ID, storage.ImageDigestBigDataKey, m); err != nil {
-		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-		}
-		logrus.Debugf("error saving manifest for image %q: %v", img.ID, err)
-		return err
-	}
-	// Save the signatures, if we have any.
-	sigblob := s.signatures[instanceFor(instanceDigest)]
-	if len(sigblob) > 0 {
-		if err := s.imageRef.transport.store.SetImageBigData(img.ID, "signatures", sigblob); err != nil {
-			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-				logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-			}
-			logrus.Debugf("error saving signatures for image %q: %v", img.ID, err)
-			return err
-		}
-	}
-	// Save our metadata.
-	metadata, err := json.Marshal(storageImageMetadata{SignatureSizes: s.signatureSizes[instanceFor(instanceDigest)]})
-	if err != nil {
-		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-		}
-		logrus.Debugf("error encoding metadata for image %q: %v", img.ID, err)
-		return err
-	}
-	if len(metadata) != 0 {
-		if err = s.imageRef.transport.store.SetMetadata(img.ID, string(metadata)); err != nil {
-			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
-				logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
-			}
-			logrus.Debugf("error saving metadata for image %q: %v", img.ID, err)
-			return err
-		}
-		logrus.Debugf("saved image metadata %q", string(metadata))
-	}
-	return nil
+	return s.commitImageRecord(instanceDigest, m, intendedID, lastLayer, options)
 }
 
 func (s *storageImageDestination) commitSingleOrGroup(instanceDigest *digest.Digest) error {
