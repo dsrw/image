@@ -567,9 +567,6 @@ func (s *storageImageDestination) commitDataBlobs(imageID string) error {
 			return errors.Wrapf(err, "error copying non-layer blob %q to image", blob)
 		}
 		if err := s.imageRef.transport.store.SetImageBigData(imageID, blob.String(), v); err != nil {
-			if _, err2 := s.imageRef.transport.store.DeleteImage(imageID, true); err2 != nil {
-				logrus.Debugf("error deleting incomplete image %q: %v", imageID, err2)
-			}
 			logrus.Debugf("error saving big data %q for image %q: %v", blob.String(), imageID, err)
 			return errors.Wrapf(err, "error saving big data %q for image %q", blob.String(), imageID)
 		}
@@ -596,9 +593,6 @@ func (s *storageImageDestination) commitName(imageID string, oldNames []string, 
 			names = append(names, oldNames...)
 		}
 		if err = s.imageRef.transport.store.SetNames(imageID, names); err != nil {
-			if _, err2 := s.imageRef.transport.store.DeleteImage(imageID, true); err2 != nil {
-				logrus.Debugf("error deleting incomplete image %q: %v", imageID, err2)
-			}
 			logrus.Debugf("error setting names %v on image %q: %v", names, imageID, err)
 			return errors.Wrapf(err, "error setting names %v on image %q", names, imageID)
 		}
@@ -654,10 +648,16 @@ func (s *storageImageDestination) commitGroup(instanceDigest *digest.Digest) err
 	// Add the non-layer blobs as data items.  Since we only share layers, they should all be in files, so
 	// we just need to screen out the ones that are actually layers to get the list of non-layers.
 	if err = s.commitDataBlobs(img.ID); err != nil {
+		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
+			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
+		}
 		return errors.Wrapf(err, "error saving non-layer blobs to image %q", img.ID)
 	}
 	// Set the reference's name on the image.
 	if err = s.commitName(img.ID, oldNames, instanceDigest); err != nil {
+		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
+			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
+		}
 		return errors.Wrapf(err, "error setting name on image %q", img.ID)
 	}
 	// Save the manifest.  Use storage.ImageDigestBigDataKey as the item's
@@ -836,10 +836,16 @@ func (s *storageImageDestination) commitSingle(instanceDigest *digest.Digest) er
 	// Add the non-layer blobs as data items.  Since we only share layers, they should all be in files, so
 	// we just need to screen out the ones that are actually layers to get the list of non-layers.
 	if err = s.commitDataBlobs(img.ID); err != nil {
+		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
+			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
+		}
 		return errors.Wrapf(err, "error saving non-layer blobs to image %q", img.ID)
 	}
 	// Set the reference's name on the image.
 	if err = s.commitName(img.ID, oldNames, instanceDigest); err != nil {
+		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
+			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
+		}
 		return errors.Wrapf(err, "error setting name on image %q", img.ID)
 	}
 	// Save the manifest.  Use storage.ImageDigestBigDataKey as the item's
