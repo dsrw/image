@@ -271,8 +271,6 @@ func (d *ociImageDestination) addManifest(desc *imgspecv1.Descriptor) {
 				d.index.Manifests[i] = *desc
 				return
 			}
-			// Replace the other fields that might have changed, even if the content didn't.
-			d.index.Manifests[i].MediaType = desc.MediaType
 		}
 	}
 	// It's a new entry to be added to the index.
