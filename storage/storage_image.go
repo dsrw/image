@@ -579,7 +579,7 @@ func (s *storageImageDestination) commitDataBlobs(imageID string) error {
 func (s *storageImageDestination) commitName(imageID string, oldNames []string, instanceDigest *digest.Digest) error {
 	if name := s.imageRef.DockerReference(); len(oldNames) > 0 || name != nil {
 		var err error
-		if instanceDigest != nil {
+		if instanceDigest != nil && name != nil {
 			name, err = reference.WithDigest(reference.TrimNamed(name), *instanceDigest)
 			if err != nil {
 				return errors.Wrapf(err, "error computing name for image %q", imageID)
