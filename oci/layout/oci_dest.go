@@ -240,56 +240,8 @@ func (d *ociImageDestination) PutManifest(m []byte, instanceDigest *digest.Diges
 		annotations[imgspecv1.AnnotationRefName] = d.ref.image
 	}
 	desc.Annotations = annotations
-
 	// If we knew the MIME type, we wouldn't have to guess here.
-	mt := manifest.GuessMIMEType(m)
-	switch mt {
-	case imgspecv1.MediaTypeImageManifest:
-		// Continue filling out the descriptor.
-		desc.MediaType = imgspecv1.MediaTypeImageManifest
-		// Try to figure out what the Platform field should contain.
-		// Our fallback is a guess that it matches the current platform.
-		desc.Platform = &imgspecv1.Platform{
-			Architecture: runtime.GOARCH,
-			OS:           runtime.GOOS,
-		}
-		// If we can parse the manifest, see if we can read the config blob.
-		oci1, err := manifest.OCI1FromManifest(m)
-		if err != nil {
-			return errors.Errorf("unable to parse image manifest %q: %v", string(m), err)
-		}
-		configDigest := oci1.ConfigInfo()
-		if configDigest.Digest.Validate() != nil {
-			// The manifest didn't have a configuration blob, so our guess will have to do.
-			break
-		}
-		configPath, err := d.ref.blobPath(configDigest.Digest, d.sharedBlobDir)
-		if err != nil {
-			return err
-		}
-		config, err := ioutil.ReadFile(configPath)
-		if err != nil {
-			// The configuration hasn't been given to us yet, which is unusual, but not fatal.
-			break
-		}
-		image := imgspecv1.Image{}
-		err = json.Unmarshal(config, &image)
-		if err != nil {
-			return errors.Wrapf(err, "error parsing image configuration blob %q", string(config))
-		}
-		// Dig the architecture and OS out of the configuration structure.  We can't find all of
-		// the fields in Platform in an Image (in particular, Variant), but this is better than
-		// nothing, and at least what we have is correct.
-		desc.Platform = &imgspecv1.Platform{
-			Architecture: image.Architecture,
-			OS:           image.OS,
-		}
-	case imgspecv1.MediaTypeImageIndex:
-		// Continue filling out the descriptor.
-		desc.MediaType = imgspecv1.MediaTypeImageIndex
-	default:
-		return errors.Errorf("unable to determine MIME type of manifest %q", string(m))
-	}
+	desc.MediaType = manifest.GuessMIMEType(m)
 
 	d.addManifest(&desc)
 
