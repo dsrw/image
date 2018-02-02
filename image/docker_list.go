@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func manifestSchema2FromManifestList(ctx *types.SystemContext, src types.ImageSource, manblob []byte) (genericManifest, error) {
+func manifestSchema2FromList(ctx *types.SystemContext, src types.ImageSource, manblob []byte) (genericManifest, error) {
 	list, err := manifest.Schema2ListFromManifest(manblob)
 	if err != nil {
 		return nil, err

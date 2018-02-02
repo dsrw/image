@@ -11,19 +11,19 @@ import (
 )
 
 var (
-	// SupportedManifestListMIMETypes is a list of the manifest list types that we know how
-	// to read/manipulate/write.
-	SupportedManifestListMIMETypes = []string{
+	// SupportedListMIMETypes is a list of the manifest list types that we know how to
+	// read/manipulate/write.
+	SupportedListMIMETypes = []string{
 		DockerV2ListMediaType,
 		imgspecv1.MediaTypeImageIndex,
 	}
 )
 
-// ManifestList is an interface for parsing, modifying lists of image manifests.
+// List is an interface for parsing, modifying lists of image manifests.
 // Callers can either use this abstract interface without understanding the details of the formats,
 // or instantiate a specific implementation (e.g. manifest.OCI1Index) and access the public members
 // directly.
-type ManifestList interface {
+type List interface {
 	// MIMEType returns the MIME type of this particular manifest list.
 	MIMEType() string
 
@@ -33,7 +33,7 @@ type ManifestList interface {
 	// Update information about the list's instances.  The length of the passed-in slice must
 	// match the length of the list of instances which the list already contains, and every field
 	// must be specified.
-	UpdateInstances([]ManifestListUpdate) error
+	UpdateInstances([]ListUpdate) error
 
 	// ChooseInstance selects which manifest is most appropriate for the platform described by the
 	// SystemContext, or for the current platform if the SystemContext doesn't specify any details.
@@ -54,14 +54,14 @@ type ManifestList interface {
 	ToSchema2List() (*Schema2List, error)
 
 	// ConvertToMIMEType returns the list rebuilt to the specified MIME type, or an error.
-	ConvertToMIMEType(mimeType string) (ManifestList, error)
+	ConvertToMIMEType(mimeType string) (List, error)
 
 	// Clone returns a deep copy of this list and its contents.
-	Clone() ManifestList
+	Clone() List
 }
 
-// ManifestListUpdate includes the fields which a ManifestList's UpdateInstances() method will modify.
-type ManifestListUpdate struct {
+// ListUpdate includes the fields which a List's UpdateInstances() method will modify.
+type ListUpdate struct {
 	Digest    digest.Digest
 	Size      int64
 	MediaType string
@@ -94,7 +94,7 @@ func dupStringStringMap(m map[string]string) map[string]string {
 }
 
 // ListFromBlob parses a list of manifests.
-func ListFromBlob(manifest []byte, manifestMIMEType string) (ManifestList, error) {
+func ListFromBlob(manifest []byte, manifestMIMEType string) (List, error) {
 	normalized := NormalizedMIMEType(manifestMIMEType)
 	switch normalized {
 	case DockerV2ListMediaType:
@@ -107,8 +107,8 @@ func ListFromBlob(manifest []byte, manifestMIMEType string) (ManifestList, error
 	return nil, fmt.Errorf("Unimplemented manifest MIME type %s (normalized as %s)", manifestMIMEType, normalized)
 }
 
-// computeListID computes an image ID using the list of images referred to in a ManifestList.
-func computeListID(manifests ManifestList) string {
+// computeListID computes an image ID using the list of images referred to in a List.
+func computeListID(manifests List) string {
 	instances := manifests.Instances()
 	digests := make([][]byte, len(instances))
 	for i, manifest := range manifests.Instances() {
@@ -118,9 +118,9 @@ func computeListID(manifests ManifestList) string {
 	return digest.FromBytes(bytes.Join(digests, []byte{0})).Hex()
 }
 
-// ConvertManifestListToMIMEType converts the passed-in manifest list to a manifest
+// ConvertListToMIMEType converts the passed-in manifest list to a manifest
 // list of the specified type.
-func ConvertManifestListToMIMEType(list ManifestList, manifestMIMEType string) (ManifestList, error) {
+func ConvertListToMIMEType(list List, manifestMIMEType string) (List, error) {
 	switch normalized := NormalizedMIMEType(manifestMIMEType); normalized {
 	case DockerV2ListMediaType:
 		return list.ToSchema2List()

@@ -57,7 +57,7 @@ func (list *Schema2List) Instances() []types.BlobInfo {
 
 // UpdateInstances updates the sizes, digests, and media types of the manifests
 // which the list catalogs.
-func (list *Schema2List) UpdateInstances(updates []ManifestListUpdate) error {
+func (list *Schema2List) UpdateInstances(updates []ListUpdate) error {
 	if len(updates) != len(list.Manifests) {
 		return errors.Errorf("incorrect number of update entries passed to Schema2List.UpdateInstances: expected %d, got %d", len(list.Manifests), len(updates))
 	}
@@ -189,12 +189,12 @@ func Schema2ListFromManifest(manifest []byte) (*Schema2List, error) {
 }
 
 // Clone returns a deep copy of this list and its contents.
-func (list *Schema2List) Clone() ManifestList {
+func (list *Schema2List) Clone() List {
 	return Schema2ListClone(list)
 }
 
 // ConvertToMIMEType converts the passed-in manifest list to a manifest
 // list of the specified type.
-func (list *Schema2List) ConvertToMIMEType(manifestMIMEType string) (ManifestList, error) {
-	return ConvertManifestListToMIMEType(list, manifestMIMEType)
+func (list *Schema2List) ConvertToMIMEType(manifestMIMEType string) (List, error) {
+	return ConvertListToMIMEType(list, manifestMIMEType)
 }

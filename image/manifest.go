@@ -55,7 +55,7 @@ func manifestInstanceFromBlob(ctx *types.SystemContext, src types.ImageSource, m
 	case manifest.DockerV2Schema2MediaType:
 		return manifestSchema2FromManifest(src, manblob)
 	case manifest.DockerV2ListMediaType:
-		return manifestSchema2FromManifestList(ctx, src, manblob)
+		return manifestSchema2FromList(ctx, src, manblob)
 	case imgspecv1.MediaTypeImageIndex:
 		return manifestOCI1FromImageIndex(ctx, src, manblob)
 	default: // Note that this may not be reachable, manifest.NormalizedMIMEType has a default for unknown values.

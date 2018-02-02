@@ -40,7 +40,7 @@ func (index *OCI1Index) Instances() []types.BlobInfo {
 
 // UpdateInstances updates the sizes, digests, and media types of the manifests
 // which the list catalogs.
-func (index *OCI1Index) UpdateInstances(updates []ManifestListUpdate) error {
+func (index *OCI1Index) UpdateInstances(updates []ListUpdate) error {
 	if len(updates) != len(index.Manifests) {
 		return errors.Errorf("incorrect number of update entries passed to OCI1Index.UpdateInstances: expected %d, got %d", len(index.Manifests), len(updates))
 	}
@@ -194,12 +194,12 @@ func OCI1IndexFromManifest(manifest []byte) (*OCI1Index, error) {
 }
 
 // Clone returns a deep copy of this list and its contents.
-func (index *OCI1Index) Clone() ManifestList {
+func (index *OCI1Index) Clone() List {
 	return OCI1IndexClone(index)
 }
 
 // ConvertToMIMEType converts the passed-in image index to a manifest list of
 // the specified type.
-func (index *OCI1Index) ConvertToMIMEType(manifestMIMEType string) (ManifestList, error) {
-	return ConvertManifestListToMIMEType(index, manifestMIMEType)
+func (index *OCI1Index) ConvertToMIMEType(manifestMIMEType string) (List, error) {
+	return ConvertListToMIMEType(index, manifestMIMEType)
 }

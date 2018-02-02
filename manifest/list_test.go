@@ -28,21 +28,21 @@ func isSchema2List(i interface{}) bool {
 	return false
 }
 
-func cloneOCI1Index(i interface{}) ManifestList {
+func cloneOCI1Index(i interface{}) List {
 	if impl, ok := i.(*OCI1Index); ok {
 		return OCI1IndexClone(impl)
 	}
 	return nil
 }
 
-func cloneSchema2List(i interface{}) ManifestList {
+func cloneSchema2List(i interface{}) List {
 	if impl, ok := i.(*Schema2List); ok {
 		return Schema2ListClone(impl)
 	}
 	return nil
 }
 
-func pare(m ManifestList) {
+func pare(m List) {
 	if impl, ok := m.(*OCI1Index); ok {
 		impl.Annotations = nil
 	}

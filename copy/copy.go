@@ -273,7 +273,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 
 	// Copy each image, in turn.
 	instanceBlobs := list.Instances()
-	updates := make([]manifest.ManifestListUpdate, len(instanceBlobs))
+	updates := make([]manifest.ListUpdate, len(instanceBlobs))
 	for i, instance := range instanceBlobs {
 		logrus.Debugf("Copying instance %s (%d/%d)", instance.Digest, i+1, len(instanceBlobs))
 		unparsedInstance := image.UnparsedInstance(c.rawSource, &instance.Digest)
@@ -286,7 +286,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 		if err != nil {
 			return err
 		}
-		update := manifest.ManifestListUpdate{
+		update := manifest.ListUpdate{
 			Digest:    md,
 			Size:      int64(len(updatedManifest)),
 			MediaType: updatedManifestType,
@@ -306,7 +306,7 @@ func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, opti
 	}
 
 	// Determine if we need to convert the manifest to a different format.
-	selectedType, _, err := c.determineManifestListConversion(manifestType, c.dest.SupportedManifestMIMETypes(), "")
+	selectedType, _, err := c.determineListConversion(manifestType, c.dest.SupportedManifestMIMETypes(), "")
 	if err != nil {
 		return errors.Wrapf(err, "Error determining manifest list type to write to destination")
 	}
