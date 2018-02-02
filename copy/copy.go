@@ -238,37 +238,6 @@ func supportsMultipleImages(dest types.ImageDestination) bool {
 	return false
 }
 
-// determineManifestListConversion returns the MIME type to which we should convert
-func (c *copier) determineManifestListConversion(currentManifestListMIMEType string, destSupportedManifestListMIMETypes []string, forcedManifestListMIMEType string) (string, []string, error) {
-	// If there's no list of supported types, then anything we support is expected to be supported.
-	if len(destSupportedManifestListMIMETypes) == 0 {
-		destSupportedManifestListMIMETypes = manifest.SupportedManifestListMIMETypes
-	}
-	// The lowest priority is the first member of the list of acceptable types.
-	selectedType := destSupportedManifestListMIMETypes[0]
-	// ... but if the current type is acceptable, we prefer that, to avoid having
-	// to do a format conversion.
-	for _, allowedType := range destSupportedManifestListMIMETypes {
-		if allowedType == currentManifestListMIMEType {
-			selectedType = allowedType
-			break
-		}
-	}
-	// ... but if we're forcing it, we prefer the forced value a bit more.
-	if forcedManifestListMIMEType != "" {
-		selectedType = forcedManifestListMIMEType
-	}
-	// Build the list of also-acceptable types.
-	otherTypes := make([]string, 0, len(destSupportedManifestListMIMETypes))
-	for _, mt := range destSupportedManifestListMIMETypes {
-		if mt != selectedType {
-			otherTypes = append(otherTypes, mt)
-		}
-	}
-	// Done.
-	return selectedType, otherTypes, nil
-}
-
 // copyMultipleImages copies all of an image's instances, using policyContext to validate
 // source image admissibility.
 func (c *copier) copyMultipleImages(policyContext *signature.PolicyContext, options *Options, unparsedToplevel *image.UnparsedImage) (retErr error) {

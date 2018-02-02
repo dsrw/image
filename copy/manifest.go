@@ -113,3 +113,37 @@ func isMultiImage(img types.UnparsedImage) (bool, error) {
 	}
 	return manifest.MIMETypeIsMultiImage(mt), nil
 }
+
+// determineManifestListConversion returns the MIME type to which we should convert a list of manifests.
+// Returns the preferred manifest MIME type (whether we are converting to it or using it unmodified),
+// and a list of other possible alternatives, in order.
+func (c *copier) determineManifestListConversion(currentManifestListMIMEType string, destSupportedManifestListMIMETypes []string, forcedManifestListMIMEType string) (string, []string, error) {
+	// If there's no list of supported types, then anything we support is expected to be supported.
+	if len(destSupportedManifestListMIMETypes) == 0 {
+		destSupportedManifestListMIMETypes = manifest.SupportedManifestListMIMETypes
+	}
+	// The lowest priority is the first member of the list of acceptable types.
+	selectedType := destSupportedManifestListMIMETypes[0]
+	if forcedManifestListMIMEType != "" {
+		// If we're forcing it, we prefer the forced value over everything else.
+		selectedType = forcedManifestListMIMEType
+	} else {
+		// If the current type is in the list of acceptable types, we prefer that,
+		// to avoid having to do a format conversion.
+		for _, allowedType := range destSupportedManifestListMIMETypes {
+			if allowedType == currentManifestListMIMEType {
+				selectedType = allowedType
+				break
+			}
+		}
+	}
+	// Build the list of also-acceptable types.
+	otherTypes := make([]string, 0, len(destSupportedManifestListMIMETypes))
+	for _, mt := range destSupportedManifestListMIMETypes {
+		if mt != selectedType {
+			otherTypes = append(otherTypes, mt)
+		}
+	}
+	// Done.
+	return selectedType, otherTypes, nil
+}
