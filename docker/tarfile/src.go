@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 
 	"github.com/containers/image/internal/tmpdir"
 	"github.com/containers/image/manifest"
@@ -30,6 +32,7 @@ type Source struct {
 	knownLayers       map[digest.Digest]*layerInfo
 	// Other state
 	generatedManifest []byte // Private cache for GetManifest(), nil if not set yet.
+	manifestIndex     int
 }
 
 type layerInfo struct {
@@ -44,6 +47,14 @@ type layerInfo struct {
 
 // NewSourceFromFile returns a tarfile.Source for the specified path.
 func NewSourceFromFile(path string) (*Source, error) {
+	manifestIndex := 0
+	r := regexp.MustCompile(`.*\[(\d+)]`)
+	indexStr := r.FindStringSubmatch(path)
+	if indexStr != nil {
+		manifestIndex, _ = strconv.Atoi(indexStr[1])
+		path = path[0:len(path) - 1 - len(indexStr)]
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error opening file %q", path)
@@ -59,16 +70,17 @@ func NewSourceFromFile(path string) (*Source, error) {
 	defer stream.Close()
 	if !isCompressed {
 		return &Source{
-			tarPath: path,
+			tarPath:       path,
+			manifestIndex: manifestIndex,
 		}, nil
 	}
-	return NewSourceFromStream(stream)
+	return NewSourceFromStream(stream, manifestIndex)
 }
 
 // NewSourceFromStream returns a tarfile.Source for the specified inputStream,
 // which can be either compressed or uncompressed. The caller can close the
 // inputStream immediately after NewSourceFromFile returns.
-func NewSourceFromStream(inputStream io.Reader) (*Source, error) {
+func NewSourceFromStream(inputStream io.Reader, manifestIndex int) (*Source, error) {
 	// FIXME: use SystemContext here.
 	// Save inputStream to a temporary file
 	tarCopyFile, err := ioutil.TempFile(tmpdir.TemporaryDirectoryForBigFiles(), "docker-tar")
@@ -105,6 +117,7 @@ func NewSourceFromStream(inputStream io.Reader) (*Source, error) {
 	return &Source{
 		tarPath:              tarCopyFile.Name(),
 		removeTarPathOnClose: true,
+		manifestIndex:        manifestIndex,
 	}, nil
 }
 
@@ -210,27 +223,27 @@ func (s *Source) ensureCachedDataIsPresent() error {
 	}
 
 	// Check to make sure length is 1
-	if len(tarManifest) != 1 {
-		return errors.Errorf("Unexpected tar manifest.json: expected 1 item, got %d", len(tarManifest))
+	if len(tarManifest) <= s.manifestIndex {
+		return errors.Errorf("Unexpected tar manifest.json: expected <= %d items, got %d", s.manifestIndex, len(tarManifest))
 	}
 
 	// Read and parse config.
-	configBytes, err := s.readTarComponent(tarManifest[0].Config)
+	configBytes, err := s.readTarComponent(tarManifest[s.manifestIndex].Config)
 	if err != nil {
 		return err
 	}
 	var parsedConfig manifest.Schema2Image // There's a lot of info there, but we only really care about layer DiffIDs.
 	if err := json.Unmarshal(configBytes, &parsedConfig); err != nil {
-		return errors.Wrapf(err, "Error decoding tar config %s", tarManifest[0].Config)
+		return errors.Wrapf(err, "Error decoding tar config %s", tarManifest[s.manifestIndex].Config)
 	}
 
-	knownLayers, err := s.prepareLayerData(&tarManifest[0], &parsedConfig)
+	knownLayers, err := s.prepareLayerData(&tarManifest[s.manifestIndex], &parsedConfig)
 	if err != nil {
 		return err
 	}
 
 	// Success; commit.
-	s.tarManifest = &tarManifest[0]
+	s.tarManifest = &tarManifest[s.manifestIndex]
 	s.configBytes = configBytes
 	s.configDigest = digest.FromBytes(configBytes)
 	s.orderedDiffIDList = parsedConfig.RootFS.DiffIDs
