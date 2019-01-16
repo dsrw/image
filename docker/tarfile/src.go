@@ -52,7 +52,7 @@ func NewSourceFromFile(path string) (*Source, error) {
 	indexStr := r.FindStringSubmatch(path)
 	if indexStr != nil {
 		manifestIndex, _ = strconv.Atoi(indexStr[1])
-		path = path[0:len(path) - 1 - len(indexStr)]
+		path = path[0:len(path) - 2 - len(indexStr[1])]
 	}
 
 	file, err := os.Open(path)
